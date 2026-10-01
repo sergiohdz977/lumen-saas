@@ -1,8 +1,10 @@
 # lumen
 
-Backend en Django para que fotógrafos gestionen clientes,
-sesiones y galerías privadas.
+A SaaS platform for photographers to manage clients,
+shoots, and private galleries.
 
-## Estado
+Built with Django and Django REST Framework.
 
-- En progreso
+## Status
+
+- In development 
