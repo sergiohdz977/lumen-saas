@@ -9,3 +9,10 @@
 - Added custom User model (AbstractUser)
 - Added JWT auth: register, login, refresh
 - Next: clients module (CRUD with per-user permissions)
+
+## 2026-10-05
+- Added `role` field to User (`photographer` / `customer`, default `customer`)
+- Included `role` in the registration payload
+- Registered User in Django admin with role filter
+- Fixed JWT refresh URL (`/api/auth/token/refresh/`)
+- Next: `IsPhotographer` permission
