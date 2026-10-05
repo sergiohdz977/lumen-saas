@@ -15,4 +15,5 @@
 - Included `role` in the registration payload
 - Registered User in Django admin with role filter
 - Fixed JWT refresh URL (`/api/auth/token/refresh/`)
-- Next: `IsPhotographer` permission
+- Added `IsPhotographer` permission and tests (6 passing)
+- Next: `clients` module (serializer, viewset filtered by user, urls)
