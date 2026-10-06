@@ -152,11 +152,11 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: project setup, custom User with `role` (migration applied), JWT register/login/refresh
-  (email uniqueness, password min length, role selectable at registration), fixed refresh URL,
-  `Client` and `Shoot` models, User registered in admin, `IsPhotographer` permission with tests,
-  `clients` module (CRUD filtered by photographer, spoofing protection, tests).
-- Now: Phase 1, step 4 — `shoots` module: serializer, viewset, status, urls.
+- Done: Phase 1 steps 1-4 — custom User with `role`, JWT register/login/refresh, `Client` and
+  `Shoot` models, `IsPhotographer` permission, `clients` CRUD, `shoots` CRUD with status state
+  machine and ownership checks, admin registration, tests (31 passing).
+- Now: Phase 1, step 5 — tests for users, clients and shoots, especially permissions (review
+  and extend coverage).
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

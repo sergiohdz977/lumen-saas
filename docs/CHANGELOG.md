@@ -17,4 +17,5 @@
 - Fixed JWT refresh URL (`/api/auth/token/refresh/`)
 - Added `IsPhotographer` permission and tests (6 passing)
 - Added `clients` module: serializer, viewset, urls, admin and tests (17 passing total)
-- Next: `shoots` module (serializer, viewset, status, urls)
+- Added `shoots` module: state machine (`booked -> editing -> delivered`), ownership validation, tests (31 passing total)
+- Next: Phase 1 tests review, then Phase 2 `profiles`
