@@ -16,4 +16,5 @@
 - Registered User in Django admin with role filter
 - Fixed JWT refresh URL (`/api/auth/token/refresh/`)
 - Added `IsPhotographer` permission and tests (6 passing)
-- Next: `clients` module (serializer, viewset filtered by user, urls)
+- Added `clients` module: serializer, viewset, urls, admin and tests (17 passing total)
+- Next: `shoots` module (serializer, viewset, status, urls)

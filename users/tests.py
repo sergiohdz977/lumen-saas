@@ -36,7 +36,7 @@ class IsPhotographerTests(TestCase):
         request = self.factory.get("/")
         request.user = user
         return request
-
+    
     def test_anonymous_user_is_denied(self):
         request = self._request_with_user(AnonymousUser())
         self.assertFalse(IsPhotographer().has_permission(request, None))
