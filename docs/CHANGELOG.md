@@ -18,4 +18,6 @@
 - Added `IsPhotographer` permission and tests (6 passing)
 - Added `clients` module: serializer, viewset, urls, admin and tests (17 passing total)
 - Added `shoots` module: state machine (`booked -> editing -> delivered`), ownership validation, tests (31 passing total)
-- Next: Phase 1 tests review, then Phase 2 `profiles`
+- Added auth endpoint tests: register, login, refresh (42 passing total)
+- Phase 1 complete
+- Next: Phase 2, `profiles` module (PhotographerProfile with slug, public read-only endpoints)
