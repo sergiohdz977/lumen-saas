@@ -152,10 +152,10 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 complete (42 tests) + Phase 2 step 6 — `profiles` module: `PhotographerProfile`
-  with auto-unique slug, `is_published`, public read-only endpoints (`/api/profiles/{slug}/`),
-  `studio_name`/`phone` moved from `User` to profile (51 tests passing).
-- Now: Phase 2, step 7 — `Package` and `PortfolioPhoto` (text fields first, images later).
+- Done: Phase 1 complete + Phase 2 steps 6-7 — `profiles` (`PhotographerProfile` public
+  read-only, auto-slug), `Package`/`PortfolioPhoto` (public read + photographer CRUD on own
+  catalog, dynamic permissions) (73 tests passing).
+- Now: Phase 2, step 8 — search and filters (city, specialty), pagination.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

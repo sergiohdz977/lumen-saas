@@ -3,7 +3,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from users.models import User
-from .models import PhotographerProfile
+from .models import Package, PhotographerProfile, PortfolioPhoto
 
 
 class PublicProfileEndpointsTests(TestCase):
@@ -137,3 +137,289 @@ class PublicProfileEndpointsTests(TestCase):
                 studio_name="Dup 2",
                 slug="mismo-slug",
             )
+
+
+class PackageEndpointsTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.beto = User.objects.create_user(
+            username="beto",
+            email="beto@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.caro = User.objects.create_user(
+            username="caro",
+            email="caro@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.customer = User.objects.create_user(
+            username="cliente",
+            email="cliente@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.no_profile_user = User.objects.create_user(
+            username="sinperfil",
+            email="sinperfil@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.ana_profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+            is_published=True,
+        )
+        cls.beto_profile = PhotographerProfile.objects.create(
+            user=cls.beto,
+            studio_name="Beto Studio",
+            slug="beto-studio",
+            is_published=True,
+        )
+        cls.caro_profile = PhotographerProfile.objects.create(
+            user=cls.caro,
+            studio_name="Caro Studio",
+            slug="caro-studio",
+            is_published=False,
+        )
+        cls.package_ana = Package.objects.create(
+            profile=cls.ana_profile,
+            title="Boda completa",
+            description="Ceremonia y fiesta",
+            price=200,
+        )
+        cls.package_beto = Package.objects.create(
+            profile=cls.beto_profile,
+            title="Retrato",
+            price=50,
+        )
+        cls.package_caro = Package.objects.create(
+            profile=cls.caro_profile,
+            title="Oculta",
+            price=10,
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def test_list_is_public(self):
+        response = self.api.get("/api/packages/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_list_only_shows_published_profiles_packages(self):
+        response = self.api.get("/api/packages/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = [p["title"] for p in response.data]
+        self.assertEqual(len(response.data), 2)
+        self.assertIn("Boda completa", titles)
+        self.assertIn("Retrato", titles)
+        self.assertNotIn("Oculta", titles)
+
+    def test_list_filter_by_profile_slug(self):
+        response = self.api.get("/api/packages/?profile=ana-studio")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["title"], "Boda completa")
+
+    def test_detail_published_package(self):
+        response = self.api.get(f"/api/packages/{self.package_ana.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["price"], "200.00")
+        self.assertEqual(response.data["profile_slug"], "ana-studio")
+        self.assertEqual(response.data["studio_name"], "Ana Studio")
+
+    def test_detail_unpublished_profile_package_returns_404(self):
+        response = self.api.get(f"/api/packages/{self.package_caro.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_anonymous_create_is_denied(self):
+        response = self.api.post(
+            "/api/packages/",
+            {"title": "Hack", "price": "10.00"},
+            format="json",
+        )
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
+
+    def test_customer_create_is_denied(self):
+        self.api.force_authenticate(self.customer)
+        response = self.api.post(
+            "/api/packages/",
+            {"title": "Hack", "price": "10.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_photographer_creates_package_on_own_profile(self):
+        self.api.force_authenticate(self.ana)
+        payload = {"title": "Sesion parejas", "price": "80.00"}
+        response = self.api.post("/api/packages/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        package = Package.objects.get(title="Sesion parejas")
+        self.assertEqual(package.profile, self.ana_profile)
+        self.assertEqual(response.data["profile_slug"], "ana-studio")
+
+    def test_photographer_without_profile_cannot_create(self):
+        self.api.force_authenticate(self.no_profile_user)
+        payload = {"title": "Sin perfil", "price": "10.00"}
+        response = self.api.post("/api/packages/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_own_package(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.patch(
+            f"/api/packages/{self.package_ana.pk}/",
+            {"price": "250.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.package_ana.refresh_from_db()
+        self.assertEqual(str(self.package_ana.price), "250.00")
+
+    def test_cannot_update_others_package(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.patch(
+            f"/api/packages/{self.package_beto.pk}/",
+            {"price": "1.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_own_package(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.delete(f"/api/packages/{self.package_ana.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Package.objects.filter(pk=self.package_ana.pk).exists())
+
+    def test_cannot_delete_others_package(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.delete(f"/api/packages/{self.package_beto.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(Package.objects.filter(pk=self.package_beto.pk).exists())
+
+    def test_negative_price_rejected(self):
+        self.api.force_authenticate(self.ana)
+        payload = {"title": "Negativo", "price": "-5.00"}
+        response = self.api.post("/api/packages/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class PortfolioPhotoEndpointsTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.caro = User.objects.create_user(
+            username="caro",
+            email="caro@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.customer = User.objects.create_user(
+            username="cliente",
+            email="cliente@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.ana_profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+            is_published=True,
+        )
+        cls.caro_profile = PhotographerProfile.objects.create(
+            user=cls.caro,
+            studio_name="Caro Studio",
+            slug="caro-studio",
+            is_published=False,
+        )
+        cls.photo_ana = PortfolioPhoto.objects.create(
+            profile=cls.ana_profile,
+            image="https://cdn.example.com/foto1.jpg",
+            caption="Playa",
+        )
+        cls.photo_caro = PortfolioPhoto.objects.create(
+            profile=cls.caro_profile,
+            image="https://cdn.example.com/foto2.jpg",
+            caption="Oculta",
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def test_list_only_shows_published_profiles_photos(self):
+        response = self.api.get("/api/portfolio-photos/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["caption"], "Playa")
+
+    def test_detail_published_photo(self):
+        response = self.api.get(f"/api/portfolio-photos/{self.photo_ana.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["profile_slug"], "ana-studio")
+
+    def test_detail_unpublished_profile_photo_returns_404(self):
+        response = self.api.get(f"/api/portfolio-photos/{self.photo_caro.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_anonymous_create_is_denied(self):
+        response = self.api.post(
+            "/api/portfolio-photos/",
+            {"image": "https://cdn.example.com/x.jpg"},
+            format="json",
+        )
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
+
+    def test_customer_create_is_denied(self):
+        self.api.force_authenticate(self.customer)
+        response = self.api.post(
+            "/api/portfolio-photos/",
+            {"image": "https://cdn.example.com/x.jpg"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_photographer_creates_photo_on_own_profile(self):
+        self.api.force_authenticate(self.ana)
+        payload = {
+            "image": "https://cdn.example.com/nueva.jpg",
+            "caption": "Nuevo trabajo",
+        }
+        response = self.api.post("/api/portfolio-photos/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        photo = PortfolioPhoto.objects.get(caption="Nuevo trabajo")
+        self.assertEqual(photo.profile, self.ana_profile)
+
+    def test_cannot_update_others_photo(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.patch(
+            f"/api/portfolio-photos/{self.photo_caro.pk}/",
+            {"caption": "Hack"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_own_photo(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.delete(f"/api/portfolio-photos/{self.photo_ana.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(
+            PortfolioPhoto.objects.filter(pk=self.photo_ana.pk).exists()
+        )

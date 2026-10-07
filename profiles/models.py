@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.text import slugify
 
@@ -31,3 +32,34 @@ class PhotographerProfile(models.Model):
 
     def __str__(self):
         return self.studio_name or self.user.username
+
+
+class Package(models.Model):
+    profile = models.ForeignKey(
+        PhotographerProfile,
+        on_delete=models.CASCADE,
+        related_name="packages",
+    )
+    title = models.CharField(max_length=150)
+    description = models.TextField(blank=True)
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+    )
+
+    def __str__(self):
+        return self.title
+
+
+class PortfolioPhoto(models.Model):
+    profile = models.ForeignKey(
+        PhotographerProfile,
+        on_delete=models.CASCADE,
+        related_name="portfolio_photos",
+    )
+    image = models.URLField(max_length=500, blank=True)
+    caption = models.CharField(max_length=200, blank=True)
+
+    def __str__(self):
+        return self.caption or f"Foto #{self.pk}"

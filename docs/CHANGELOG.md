@@ -23,4 +23,6 @@
 - Added `profiles` module: `PhotographerProfile` (OneToOne, auto-slug, `is_published`),
   public read-only endpoints at `/api/profiles/{slug}/`, moved `studio_name`/`phone` from
   `User` to profile (51 passing total)
-- Next: Phase 2, `Package` and `PortfolioPhoto` (text fields first)
+- Added `Package` and `PortfolioPhoto` (text fields first): public read endpoints, photographer
+  CRUD on own catalog, dynamic permissions, `?profile=` filter (73 passing total)
+- Next: Phase 2, search and filters (city, specialty), pagination
