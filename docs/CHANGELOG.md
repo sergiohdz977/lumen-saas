@@ -20,4 +20,7 @@
 - Added `shoots` module: state machine (`booked -> editing -> delivered`), ownership validation, tests (31 passing total)
 - Added auth endpoint tests: register, login, refresh (42 passing total)
 - Phase 1 complete
-- Next: Phase 2, `profiles` module (PhotographerProfile with slug, public read-only endpoints)
+- Added `profiles` module: `PhotographerProfile` (OneToOne, auto-slug, `is_published`),
+  public read-only endpoints at `/api/profiles/{slug}/`, moved `studio_name`/`phone` from
+  `User` to profile (51 passing total)
+- Next: Phase 2, `Package` and `PortfolioPhoto` (text fields first)

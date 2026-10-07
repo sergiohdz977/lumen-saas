@@ -15,6 +15,4 @@ class User(AbstractUser):
         default=ROLE_CUSTOMER,
         verbose_name="Rol",
     )
-    studio_name = models.CharField(max_length=120, blank=True)
-    phone = models.CharField(max_length=30, blank=True)
 

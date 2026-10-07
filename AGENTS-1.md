@@ -152,11 +152,10 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 complete — custom User with `role`, JWT register/login/refresh, `Client` and
-  `Shoot` models, `IsPhotographer` permission, `clients` CRUD, `shoots` CRUD with state machine,
-  admin, auth/permission tests (42 passing).
-- Now: Phase 2, step 6 — `profiles`: `PhotographerProfile` with slug, public read-only
-  endpoints.
+- Done: Phase 1 complete (42 tests) + Phase 2 step 6 — `profiles` module: `PhotographerProfile`
+  with auto-unique slug, `is_published`, public read-only endpoints (`/api/profiles/{slug}/`),
+  `studio_name`/`phone` moved from `User` to profile (51 tests passing).
+- Now: Phase 2, step 7 — `Package` and `PortfolioPhoto` (text fields first, images later).
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.
