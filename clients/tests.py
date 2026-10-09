@@ -1,3 +1,4 @@
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -122,3 +123,40 @@ class ClientEndpointsTests(TestCase):
         response = self.api.delete(f"/api/clients/{self.client_of_b.pk}/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(Client.objects.filter(pk=self.client_of_b.pk).exists())
+
+    def test_same_customer_cannot_be_duplicated_for_same_photographer(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Client.objects.create(
+                    photographer=self.photographer_a,
+                    user=self.customer,
+                    name="Primera ficha",
+                )
+                Client.objects.create(
+                    photographer=self.photographer_a,
+                    user=self.customer,
+                    name="Duplicada",
+                )
+
+    def test_same_customer_can_be_client_of_two_photographers(self):
+        Client.objects.create(
+            photographer=self.photographer_a,
+            user=self.customer,
+            name="Ficha A",
+        )
+        Client.objects.create(
+            photographer=self.photographer_b,
+            user=self.customer,
+            name="Ficha B",
+        )
+        self.assertEqual(
+            Client.objects.filter(user=self.customer).count(), 2
+        )
+
+    def test_create_ignores_user_sent_by_client(self):
+        self.api.force_authenticate(self.photographer_a)
+        payload = {"name": "Sin vincular", "user": self.customer.pk}
+        response = self.api.post("/api/clients/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        client = Client.objects.get(name="Sin vincular")
+        self.assertIsNone(client.user)

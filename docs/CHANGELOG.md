@@ -29,5 +29,8 @@
   on all list endpoints (81 passing total)
 - Added `bookings` module: `BookingRequest` (pending/accepted/rejected), customer create,
   role-based lists, custom `accept`/`reject` actions, `IsCustomer` permission (97 passing total)
-- Next: Phase 2, accepting a request creates the `Shoot` and the `Client`, with a date-conflict
-  check
+- Accepting a booking now creates the `Client` (reused by email per photographer) and a `Shoot`
+  with status `booked`, with a same-day conflict check and atomic transaction (103 passing total)
+- Added `Client.user` FK (nullable, `SET_NULL`) with a unique `(photographer, user)` constraint:
+  bookings link the customer account server-side (107 passing total)
+- Next: Phase 2, tests for the marketplace and booking rules

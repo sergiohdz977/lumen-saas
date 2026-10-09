@@ -40,7 +40,7 @@ Photographer endpoints (JWT + `role=photographer`): full CRUD on `/api/packages/
 |--------|----------|-------------|
 | POST | `/api/bookings/` | Customer creates a booking request (`package`, `date`, `message`) |
 | GET | `/api/bookings/` | Customer: own requests / Photographer: incoming requests |
-| POST | `/api/bookings/{id}/accept/` | Photographer accepts (pending only) |
+| POST | `/api/bookings/{id}/accept/` | Photographer accepts (pending only): creates the `Client` (reused) and a `Shoot` (`booked`); 400 if a shoot already exists that day |
 | POST | `/api/bookings/{id}/reject/` | Photographer rejects (pending only) |
 
 ## Run locally

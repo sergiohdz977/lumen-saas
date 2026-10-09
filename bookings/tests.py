@@ -4,7 +4,9 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
 
+from clients.models import Client
 from profiles.models import Package, PhotographerProfile
+from shoots.models import Shoot
 from users.models import User
 from .models import BookingRequest
 
@@ -210,3 +212,180 @@ class BookingEndpointsTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertIn("Solo los fotógrafos", str(response.data))
+
+
+class AcceptSideEffectsTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.beto = User.objects.create_user(
+            username="beto",
+            email="beto@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.customer = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.ana_profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+            is_published=True,
+        )
+        cls.beto_profile = PhotographerProfile.objects.create(
+            user=cls.beto,
+            studio_name="Beto Studio",
+            slug="beto-studio",
+            is_published=True,
+        )
+        cls.package = Package.objects.create(
+            profile=cls.ana_profile, title="Boda completa", price=200
+        )
+        cls.package_beto = Package.objects.create(
+            profile=cls.beto_profile, title="Retratos", price=50
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+        self.booking = BookingRequest.objects.create(
+            customer=self.customer,
+            package=self.package,
+            date=datetime(2026, 11, 20, 10, 0, tzinfo=dt_timezone.utc),
+        )
+
+    def test_accept_creates_client_and_booked_shoot(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            f"/api/bookings/{self.booking.pk}/accept/", format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.status, BookingRequest.Status.ACCEPTED)
+        client = Client.objects.get(photographer=self.ana)
+        self.assertEqual(client.user, self.customer)
+        self.assertEqual(client.email, self.customer.email)
+        self.assertEqual(client.name, "maria")
+        shoot = Shoot.objects.get()
+        self.assertEqual(shoot.client, client)
+        self.assertEqual(shoot.status, Shoot.Status.BOOKED)
+        self.assertEqual(shoot.date, self.booking.date)
+        self.assertEqual(shoot.shoot_type, "Boda completa")
+
+    def test_accept_reuses_client_for_same_customer(self):
+        second_package = Package.objects.create(
+            profile=self.ana_profile, title="Preboda", price=80
+        )
+        second_booking = BookingRequest.objects.create(
+            customer=self.customer,
+            package=second_package,
+            date=datetime(2026, 11, 25, 10, 0, tzinfo=dt_timezone.utc),
+        )
+        self.api.force_authenticate(self.ana)
+        self.api.post(f"/api/bookings/{self.booking.pk}/accept/", format="json")
+        self.api.post(f"/api/bookings/{second_booking.pk}/accept/", format="json")
+        self.assertEqual(
+            Client.objects.filter(photographer=self.ana).count(), 1
+        )
+        self.assertEqual(Shoot.objects.count(), 2)
+
+    def test_accept_blocked_when_shoot_exists_same_day(self):
+        existing_client = Client.objects.create(
+            photographer=self.ana, name="Otro cliente"
+        )
+        Shoot.objects.create(
+            client=existing_client,
+            title="Sesion previa",
+            shoot_type="retrato",
+            date=datetime(2026, 11, 20, 18, 0, tzinfo=dt_timezone.utc),
+        )
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            f"/api/bookings/{self.booking.pk}/accept/", format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("esa fecha", str(response.data))
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.status, BookingRequest.Status.PENDING)
+        self.assertEqual(Shoot.objects.count(), 1)
+        self.assertEqual(
+            Client.objects.filter(photographer=self.ana).count(), 1
+        )
+
+    def test_accept_allowed_when_shoot_on_different_day(self):
+        existing_client = Client.objects.create(
+            photographer=self.ana, name="Otro cliente"
+        )
+        Shoot.objects.create(
+            client=existing_client,
+            title="Sesion otra dia",
+            shoot_type="retrato",
+            date=datetime(2026, 11, 21, 10, 0, tzinfo=dt_timezone.utc),
+        )
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            f"/api/bookings/{self.booking.pk}/accept/", format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Shoot.objects.count(), 2)
+
+    def test_other_photographer_shoot_does_not_block(self):
+        beto_client = Client.objects.create(
+            photographer=self.beto, name="Cliente de beto"
+        )
+        Shoot.objects.create(
+            client=beto_client,
+            title="Sesion de beto",
+            shoot_type="retrato",
+            date=datetime(2026, 11, 20, 15, 0, tzinfo=dt_timezone.utc),
+        )
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            f"/api/bookings/{self.booking.pk}/accept/", format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_reject_creates_nothing(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            f"/api/bookings/{self.booking.pk}/reject/", format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.status, BookingRequest.Status.REJECTED)
+        self.assertEqual(Shoot.objects.count(), 0)
+        self.assertEqual(Client.objects.count(), 0)
+
+    def test_two_customers_without_email_get_separate_clients(self):
+        carla = User.objects.create_user(
+            username="carla",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        carla_booking = BookingRequest.objects.create(
+            customer=carla,
+            package=self.package,
+            date=datetime(2026, 11, 26, 10, 0, tzinfo=dt_timezone.utc),
+        )
+        self.api.force_authenticate(self.ana)
+        self.api.post(f"/api/bookings/{self.booking.pk}/accept/", format="json")
+        self.api.post(
+            f"/api/bookings/{carla_booking.pk}/accept/", format="json"
+        )
+        self.assertEqual(
+            Client.objects.filter(photographer=self.ana).count(), 2
+        )
+        self.assertCountEqual(
+            Client.objects.filter(photographer=self.ana).values_list(
+                "user__username", flat=True
+            ),
+            ["maria", "carla"],
+        )

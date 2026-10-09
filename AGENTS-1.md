@@ -103,7 +103,7 @@ payments/   payment provider integration
 
 ## Models
 - `User`: AbstractUser plus `role`
-- `Client`: photographer (FK to User), name, email, phone, created_at
+- `Client`: photographer (FK to User), user (FK to User, nullable), name, email, phone, created_at
 - `Shoot`: client (FK), title, shoot_type, date, status (`booked`, `editing`, `delivered`), created_at
 - `PhotographerProfile`: user (OneToOne), studio_name, slug (unique), bio, city, specialties,
   phone, is_published, created_at
@@ -152,11 +152,11 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 complete + Phase 2 steps 6-9 — `profiles` (public read-only, filters),
-  `Package`/`PortfolioPhoto`, pagination, `bookings` (`BookingRequest` create, role-based lists,
-  custom `accept`/`reject` actions, `IsCustomer` permission) (97 tests passing).
-- Now: Phase 2, step 10 — accepting a request creates the `Shoot` and the `Client`, with a
-  date-conflict check.
+- Done: Phase 1 complete + Phase 2 steps 6-10 — `profiles` (public read-only, filters),
+  `Package`/`PortfolioPhoto`, pagination, `bookings` (create, role-based lists, `accept`/`reject`
+  with `Client` + `Shoot` creation and same-day conflict check), `Client.user` FK with unique
+  per-photographer constraint (107 tests passing).
+- Now: Phase 2, step 11 — tests for the marketplace and booking rules.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.
