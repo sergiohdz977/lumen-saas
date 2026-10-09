@@ -25,4 +25,6 @@
   `User` to profile (51 passing total)
 - Added `Package` and `PortfolioPhoto` (text fields first): public read endpoints, photographer
   CRUD on own catalog, dynamic permissions, `?profile=` filter (73 passing total)
-- Next: Phase 2, search and filters (city, specialty), pagination
+- Added profile filters (`?city=`, `?specialty=`), global pagination (10/page), stable ordering
+  on all list endpoints (81 passing total)
+- Next: Phase 2, `bookings` module (create, list, accept and reject `BookingRequest`)

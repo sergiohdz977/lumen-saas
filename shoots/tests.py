@@ -76,8 +76,8 @@ class ShootEndpointsTests(TestCase):
         self.api.force_authenticate(self.photographer_a)
         response = self.api.get("/api/shoots/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["title"], "Boda Maria")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["title"], "Boda Maria")
 
     def test_photographer_retrieves_own_shoot(self):
         self.api.force_authenticate(self.photographer_a)

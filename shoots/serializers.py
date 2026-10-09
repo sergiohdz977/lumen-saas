@@ -18,7 +18,7 @@ class ShootSerializer(serializers.ModelSerializer):
 
     def validate_status(self, value):
         if self.instance is None:
-            return value
+            return value 
         if value == self.instance.status:
             return value
         allowed_transitions = {

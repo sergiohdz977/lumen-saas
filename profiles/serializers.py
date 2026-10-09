@@ -19,7 +19,7 @@ class PhotographerProfileSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
-
+    
 
 class PackageSerializer(serializers.ModelSerializer):
     profile_slug = serializers.CharField(source="profile.slug", read_only=True)
@@ -53,6 +53,6 @@ class PortfolioPhotoSerializer(serializers.ModelSerializer):
             "profile_slug",
             "studio_name",
             "image",
-            "caption",
+            "caption",  
         ]
         read_only_fields = ["id", "profile_slug", "studio_name"]

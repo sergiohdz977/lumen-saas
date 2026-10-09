@@ -19,11 +19,12 @@ Roles are chosen at registration: `photographer` or `customer` (default).
 
 ## Marketplace (current)
 
-Public endpoints (no auth required):
+Public endpoints (no auth required). List responses are paginated
+(`count`, `next`, `previous`, `results`; 10 per page).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/profiles/` | List published photographer profiles |
+| GET | `/api/profiles/` | List published profiles (filters: `?city=`, `?specialty=`) |
 | GET | `/api/profiles/{slug}/` | Profile detail |
 | GET | `/api/packages/` | List packages (filter: `?profile={slug}`) |
 | GET | `/api/packages/{id}/` | Package detail |

@@ -56,8 +56,8 @@ class ClientEndpointsTests(TestCase):
         self.api.force_authenticate(self.photographer_a)
         response = self.api.get("/api/clients/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], "Cliente Ana")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["name"], "Cliente Ana")
 
     def test_photographer_retrieves_own_client(self):
         self.api.force_authenticate(self.photographer_a)

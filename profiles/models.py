@@ -19,6 +19,9 @@ class PhotographerProfile(models.Model):
     is_published = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        ordering = ["-created_at"]
+
     def save(self, *args, **kwargs):
         if not self.slug:
             base = slugify(self.studio_name or self.user.username)
@@ -48,6 +51,9 @@ class Package(models.Model):
         validators=[MinValueValidator(0)],
     )
 
+    class Meta:
+        ordering = ["id"]
+
     def __str__(self):
         return self.title
 
@@ -61,5 +67,10 @@ class PortfolioPhoto(models.Model):
     image = models.URLField(max_length=500, blank=True)
     caption = models.CharField(max_length=200, blank=True)
 
+    class Meta:
+        ordering = ["id"]
+
     def __str__(self):
         return self.caption or f"Foto #{self.pk}"
+
+    

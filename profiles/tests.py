@@ -47,8 +47,8 @@ class PublicProfileEndpointsTests(TestCase):
     def test_list_only_shows_published_profiles(self):
         response = self.api.get("/api/profiles/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["slug"], "ana-studio")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["slug"], "ana-studio")
 
     def test_detail_published_profile_by_slug(self):
         response = self.api.get("/api/profiles/ana-studio/")
@@ -97,6 +97,102 @@ class PublicProfileEndpointsTests(TestCase):
             "created_at",
         }
         self.assertEqual(set(response.data.keys()), expected)
+
+    def test_filter_by_city_returns_matching_profiles(self):
+        user = User.objects.create_user(
+            username="santiago",
+            email="santiago@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        PhotographerProfile.objects.create(
+            user=user,
+            studio_name="Estudio Sur",
+            slug="estudio-sur",
+            city="Santiago de Cuba",
+            specialties="portraits",
+            is_published=True,
+        )
+        response = self.api.get("/api/profiles/?city=santiago")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["slug"], "estudio-sur")
+
+    def test_filter_by_city_is_case_insensitive(self):
+        response = self.api.get("/api/profiles/?city=LA+HABANA")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["slug"], "ana-studio")
+
+    def test_filter_by_specialty_returns_matching_profiles(self):
+        user = User.objects.create_user(
+            username="retratos",
+            email="retratos@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        PhotographerProfile.objects.create(
+            user=user,
+            studio_name="Solo Retratos",
+            slug="solo-retratos",
+            city="Matanzas",
+            specialties="portraits",
+            is_published=True,
+        )
+        response = self.api.get("/api/profiles/?specialty=wedding")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        slugs = [p["slug"] for p in response.data["results"]]
+        self.assertIn("ana-studio", slugs)
+        self.assertNotIn("solo-retratos", slugs)
+
+    def test_filter_with_no_match_returns_empty(self):
+        response = self.api.get("/api/profiles/?city=ciudad-inexistente")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 0)
+        self.assertEqual(response.data["results"], [])
+
+    def test_filters_can_be_combined(self):
+        response = self.api.get("/api/profiles/?city=habana&specialty=portraits")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["slug"], "ana-studio")
+
+    def _create_published_profiles(self, quantity):
+        for i in range(quantity):
+            user = User.objects.create_user(
+                username=f"pag{i}",
+                email=f"pag{i}@test.com",
+                password="secret123",
+                role=User.ROLE_PHOTOGRAPHER,
+            )
+            PhotographerProfile.objects.create(
+                user=user,
+                studio_name=f"Studio {i}",
+                slug=f"studio-{i}",
+                is_published=True,
+            )
+
+    def test_list_is_paginated(self):
+        self._create_published_profiles(12)
+        response = self.api.get("/api/profiles/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 13)
+        self.assertEqual(len(response.data["results"]), 10)
+        self.assertIsNotNone(response.data["next"])
+        self.assertIsNone(response.data["previous"])
+
+    def test_second_page_returns_the_rest(self):
+        self._create_published_profiles(12)
+        response = self.api.get("/api/profiles/?page=2")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 3)
+        self.assertIsNone(response.data["next"])
+        self.assertIsNotNone(response.data["previous"])
+
+    def test_filter_and_pagination_work_together(self):
+        self._create_published_profiles(12)
+        response = self.api.get("/api/profiles/?city=inexistente&page=2")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_slug_is_generated_automatically(self):
         user = User.objects.create_user(
@@ -217,8 +313,8 @@ class PackageEndpointsTests(TestCase):
     def test_list_only_shows_published_profiles_packages(self):
         response = self.api.get("/api/packages/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        titles = [p["title"] for p in response.data]
-        self.assertEqual(len(response.data), 2)
+        titles = [p["title"] for p in response.data["results"]]
+        self.assertEqual(response.data["count"], 2)
         self.assertIn("Boda completa", titles)
         self.assertIn("Retrato", titles)
         self.assertNotIn("Oculta", titles)
@@ -226,8 +322,8 @@ class PackageEndpointsTests(TestCase):
     def test_list_filter_by_profile_slug(self):
         response = self.api.get("/api/packages/?profile=ana-studio")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["title"], "Boda completa")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["title"], "Boda completa")
 
     def test_detail_published_package(self):
         response = self.api.get(f"/api/packages/{self.package_ana.pk}/")
@@ -364,8 +460,8 @@ class PortfolioPhotoEndpointsTests(TestCase):
     def test_list_only_shows_published_profiles_photos(self):
         response = self.api.get("/api/portfolio-photos/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["caption"], "Playa")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["caption"], "Playa")
 
     def test_detail_published_photo(self):
         response = self.api.get(f"/api/portfolio-photos/{self.photo_ana.pk}/")

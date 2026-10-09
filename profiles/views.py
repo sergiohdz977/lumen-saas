@@ -15,13 +15,23 @@ class PhotographerProfileViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PhotographerProfileSerializer
     permission_classes = [AllowAny]
     lookup_field = "slug"
-    queryset = PhotographerProfile.objects.filter(is_published=True)
+    queryset = PhotographerProfile.objects.all()
+
+    def get_queryset(self):
+        qs = PhotographerProfile.objects.filter(is_published=True)
+        city = self.request.query_params.get("city", "").strip()
+        if city:
+            qs = qs.filter(city__icontains=city)
+        specialty = self.request.query_params.get("specialty", "").strip()
+        if specialty:
+            qs = qs.filter(specialties__icontains=specialty)
+        return qs
 
 
 class ProfileOwnedViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
-            return [AllowAny()]
+            return [AllowAny()] 
         return [IsAuthenticated(), IsPhotographer()]
 
     def get_queryset(self):
