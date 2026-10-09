@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'clients',
     'shoots',
     'profiles',
+    'bookings',
 ]
 
 AUTH_USER_MODEL = "users.User"

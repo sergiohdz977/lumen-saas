@@ -152,10 +152,11 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 complete + Phase 2 steps 6-8 — `profiles` (public read-only, auto-slug,
-  filters by city/specialty), `Package`/`PortfolioPhoto` (public read + photographer CRUD),
-  pagination (10/page) and stable ordering (81 tests passing).
-- Now: Phase 2, step 9 — `bookings`: create, list, accept and reject `BookingRequest`.
+- Done: Phase 1 complete + Phase 2 steps 6-9 — `profiles` (public read-only, filters),
+  `Package`/`PortfolioPhoto`, pagination, `bookings` (`BookingRequest` create, role-based lists,
+  custom `accept`/`reject` actions, `IsCustomer` permission) (97 tests passing).
+- Now: Phase 2, step 10 — accepting a request creates the `Shoot` and the `Client`, with a
+  date-conflict check.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

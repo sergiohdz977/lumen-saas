@@ -27,4 +27,7 @@
   CRUD on own catalog, dynamic permissions, `?profile=` filter (73 passing total)
 - Added profile filters (`?city=`, `?specialty=`), global pagination (10/page), stable ordering
   on all list endpoints (81 passing total)
-- Next: Phase 2, `bookings` module (create, list, accept and reject `BookingRequest`)
+- Added `bookings` module: `BookingRequest` (pending/accepted/rejected), customer create,
+  role-based lists, custom `accept`/`reject` actions, `IsCustomer` permission (97 passing total)
+- Next: Phase 2, accepting a request creates the `Shoot` and the `Client`, with a date-conflict
+  check

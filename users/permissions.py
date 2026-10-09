@@ -12,3 +12,15 @@ class IsPhotographer(BasePermission):
             and user.is_authenticated
             and user.role == User.ROLE_PHOTOGRAPHER
         )
+
+
+class IsCustomer(BasePermission):
+    message = "Solo los clientes pueden realizar esta acción"
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user
+            and user.is_authenticated
+            and user.role == User.ROLE_CUSTOMER
+        )

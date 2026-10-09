@@ -34,6 +34,15 @@ Public endpoints (no auth required). List responses are paginated
 Photographer endpoints (JWT + `role=photographer`): full CRUD on `/api/packages/` and
 `/api/portfolio-photos/` for their own catalog. Also `/api/clients/` and `/api/shoots/`.
 
+## Bookings (current)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/bookings/` | Customer creates a booking request (`package`, `date`, `message`) |
+| GET | `/api/bookings/` | Customer: own requests / Photographer: incoming requests |
+| POST | `/api/bookings/{id}/accept/` | Photographer accepts (pending only) |
+| POST | `/api/bookings/{id}/reject/` | Photographer rejects (pending only) |
+
 ## Run locally
 
 ```bash
