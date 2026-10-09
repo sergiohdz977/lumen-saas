@@ -152,11 +152,11 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 complete + Phase 2 steps 6-10 — `profiles` (public read-only, filters),
-  `Package`/`PortfolioPhoto`, pagination, `bookings` (create, role-based lists, `accept`/`reject`
-  with `Client` + `Shoot` creation and same-day conflict check), `Client.user` FK with unique
-  per-photographer constraint (107 tests passing).
-- Now: Phase 2, step 11 — tests for the marketplace and booking rules.
+- Done: Phase 1 complete + Phase 2 complete (steps 6-11) — `profiles` (public read-only,
+  filters, pagination), `Package`/`PortfolioPhoto`, `bookings` (create, role-based lists,
+  `accept`/`reject` with `Client` + `Shoot` creation and same-day conflict check),
+  `Client.user` FK, marketplace integration tests (110 tests passing).
+- Now: Phase 3, step 12 — `galleries`: `Gallery` and `Photo` models, private access rules.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

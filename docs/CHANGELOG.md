@@ -33,4 +33,7 @@
   with status `booked`, with a same-day conflict check and atomic transaction (103 passing total)
 - Added `Client.user` FK (nullable, `SET_NULL`) with a unique `(photographer, user)` constraint:
   bookings link the customer account server-side (107 passing total)
-- Next: Phase 2, tests for the marketplace and booking rules
+- Added marketplace integration tests (full journey: register → profile → package → book →
+  accept → shoot states; rejected-booking retry; package `profile` spoof regression)
+  — Phase 2 complete (110 passing total)
+- Next: Phase 3, `galleries`: `Gallery` and `Photo` models, private access rules

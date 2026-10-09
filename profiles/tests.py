@@ -371,6 +371,18 @@ class PackageEndpointsTests(TestCase):
         response = self.api.post("/api/packages/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_package_create_ignores_profile_sent_by_client(self):
+        self.api.force_authenticate(self.ana)
+        payload = {
+            "title": "Intento Spoof",
+            "price": "10.00",
+            "profile": self.beto_profile.pk,
+        }
+        response = self.api.post("/api/packages/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        package = Package.objects.get(title="Intento Spoof")
+        self.assertEqual(package.profile, self.ana_profile)
+
     def test_update_own_package(self):
         self.api.force_authenticate(self.ana)
         response = self.api.patch(

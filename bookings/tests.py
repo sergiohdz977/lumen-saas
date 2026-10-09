@@ -389,3 +389,153 @@ class AcceptSideEffectsTests(TestCase):
             ),
             ["maria", "carla"],
         )
+
+
+class MarketplaceJourneyTests(TestCase):
+    """Full end-to-end journeys across the whole marketplace."""
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def test_full_journey_registration_to_booked_shoot(self):
+        response = self.api.post(
+            "/api/auth/register/",
+            {
+                "username": "ana",
+                "email": "ana@test.com",
+                "password": "secret12345",
+                "role": "photographer",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        ana = User.objects.get(username="ana")
+
+        PhotographerProfile.objects.create(
+            user=ana, studio_name="Ana Studio", is_published=True
+        )
+
+        self.api.force_authenticate(ana)
+        response = self.api.post(
+            "/api/packages/",
+            {"title": "Sesion de boda", "price": "150.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        package_id = response.data["id"]
+        self.assertEqual(response.data["profile_slug"], "ana-studio")
+
+        response = self.api.post(
+            "/api/auth/register/",
+            {
+                "username": "maria",
+                "email": "maria@test.com",
+                "password": "secret12345",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        maria = User.objects.get(username="maria")
+
+        self.api.force_authenticate(user=None)
+        response = self.api.get("/api/packages/")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["title"], "Sesion de boda")
+
+        self.api.force_authenticate(maria)
+        response = self.api.post(
+            "/api/bookings/",
+            {
+                "package": package_id,
+                "date": "2026-11-20T15:00:00Z",
+                "message": "Quiero reservar",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        booking_id = response.data["id"]
+        self.assertEqual(response.data["status"], "pending")
+
+        self.api.force_authenticate(ana)
+        response = self.api.get("/api/bookings/")
+        self.assertEqual(response.data["count"], 1)
+        response = self.api.post(
+            f"/api/bookings/{booking_id}/accept/", format="json"
+        )
+        self.assertEqual(response.data["status"], "accepted")
+
+        shoot = Shoot.objects.get()
+        self.assertEqual(shoot.status, Shoot.Status.BOOKED)
+        self.assertEqual(shoot.client.user, maria)
+        self.assertEqual(shoot.client.photographer, ana)
+
+        response = self.api.patch(
+            f"/api/shoots/{shoot.pk}/", {"status": "editing"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.api.patch(
+            f"/api/shoots/{shoot.pk}/", {"status": "delivered"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        shoot.refresh_from_db()
+        self.assertEqual(shoot.status, Shoot.Status.DELIVERED)
+
+    def test_rejected_booking_leaves_no_trace_and_customer_can_retry(self):
+        ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        profile = PhotographerProfile.objects.create(
+            user=ana, studio_name="Ana Studio", is_published=True
+        )
+        package = Package.objects.create(
+            profile=profile, title="Retrato", price=50
+        )
+
+        self.api.force_authenticate(maria)
+        response = self.api.post(
+            "/api/bookings/",
+            {
+                "package": package.pk,
+                "date": "2026-11-20T10:00:00Z",
+                "message": "primera",
+            },
+            format="json",
+        )
+        rejected_id = response.data["id"]
+
+        self.api.force_authenticate(ana)
+        response = self.api.post(
+            f"/api/bookings/{rejected_id}/reject/", format="json"
+        )
+        self.assertEqual(response.data["status"], "rejected")
+        self.assertEqual(Shoot.objects.count(), 0)
+        self.assertEqual(Client.objects.count(), 0)
+
+        self.api.force_authenticate(maria)
+        response = self.api.post(
+            "/api/bookings/",
+            {
+                "package": package.pk,
+                "date": "2026-11-25T10:00:00Z",
+                "message": "segunda",
+            },
+            format="json",
+        )
+        retry_id = response.data["id"]
+
+        self.api.force_authenticate(ana)
+        response = self.api.post(
+            f"/api/bookings/{retry_id}/accept/", format="json"
+        )
+        self.assertEqual(response.data["status"], "accepted")
+        self.assertEqual(Shoot.objects.count(), 1)
+        self.assertEqual(Client.objects.count(), 1)
