@@ -43,6 +43,17 @@ Photographer endpoints (JWT + `role=photographer`): full CRUD on `/api/packages/
 | POST | `/api/bookings/{id}/accept/` | Photographer accepts (pending only): creates the `Client` (reused) and a `Shoot` (`booked`); 400 if a shoot already exists that day |
 | POST | `/api/bookings/{id}/reject/` | Photographer rejects (pending only) |
 
+## Galleries (current)
+
+Private: only the photographer of the shoot and that shoot's customer can access.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/galleries/` | Photographer: own galleries / Customer: own galleries |
+| POST | `/api/galleries/` | Photographer creates a gallery for one of their shoots (unique per shoot) |
+| GET | `/api/photos/` | Same access rules as galleries |
+| POST | `/api/photos/` | Photographer adds a photo to their own gallery |
+
 ## Run locally
 
 ```bash

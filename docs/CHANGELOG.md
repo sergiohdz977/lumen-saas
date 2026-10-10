@@ -36,4 +36,7 @@
 - Added marketplace integration tests (full journey: register → profile → package → book →
   accept → shoot states; rejected-booking retry; package `profile` spoof regression)
   — Phase 2 complete (110 passing total)
-- Next: Phase 3, `galleries`: `Gallery` and `Photo` models, private access rules
+- Added `galleries` module: `Gallery` (OneToOne per shoot, manual creation) and `Photo`
+  (placeholder URL), private access (photographer CRUD own / customer read-only own),
+  Spanish unique-validator message (129 passing total)
+- Next: Phase 3, upload to Cloudflare R2 with signed URLs

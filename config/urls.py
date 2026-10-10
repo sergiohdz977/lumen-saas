@@ -8,4 +8,5 @@ urlpatterns = [
     path("api/shoots/", include("shoots.urls")),
     path("api/", include("profiles.urls")),
     path("api/", include("bookings.urls")),
+    path("api/", include("galleries.urls")),
 ]

@@ -111,7 +111,9 @@ payments/   payment provider integration
 - `PortfolioPhoto`: profile (FK), image, caption
 - `BookingRequest`: customer (FK), package (FK), date, message, status
   (`pending`, `accepted`, `rejected`)
-- `Gallery`, `Photo`, `Review`
+- `Gallery`: shoot (OneToOne), created_at
+- `Photo`: gallery (FK), image, caption, created_at
+- `Review`
 
 ## Roadmap (follow in order, one step at a time)
 
@@ -152,11 +154,10 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 complete + Phase 2 complete (steps 6-11) — `profiles` (public read-only,
-  filters, pagination), `Package`/`PortfolioPhoto`, `bookings` (create, role-based lists,
-  `accept`/`reject` with `Client` + `Shoot` creation and same-day conflict check),
-  `Client.user` FK, marketplace integration tests (110 tests passing).
-- Now: Phase 3, step 12 — `galleries`: `Gallery` and `Photo` models, private access rules.
+- Done: Phase 1 + Phase 2 complete (steps 6-11) + Phase 3 step 12 — `galleries`
+  (`Gallery` OneToOne per shoot, `Photo`, private access: photographer CRUD own, customer
+  read-only own) (129 tests passing).
+- Now: Phase 3, step 13 — upload to Cloudflare R2 with signed URLs (`django-storages`).
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

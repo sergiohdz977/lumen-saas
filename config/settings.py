@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'shoots',
     'profiles',
     'bookings',
+    'galleries',
 ]
 
 AUTH_USER_MODEL = "users.User"
