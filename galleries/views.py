@@ -24,8 +24,14 @@ class GalleryViewSet(viewsets.ModelViewSet):
             "shoot__client", "shoot__client__user"
         )
         if user.role == User.ROLE_PHOTOGRAPHER:
-            return qs.filter(shoot__client__photographer=user)
-        return qs.filter(shoot__client__user=user)
+            qs = qs.filter(shoot__client__photographer=user)
+        else:
+            qs = qs.filter(shoot__client__user=user)
+        if self.action == "list":
+            shoot_id = self.request.query_params.get("shoot")
+            if shoot_id:
+                qs = qs.filter(shoot_id=shoot_id)
+        return qs
 
 
 class PhotoViewSet(viewsets.ModelViewSet):
@@ -44,5 +50,11 @@ class PhotoViewSet(viewsets.ModelViewSet):
             return Photo.objects.none()
         qs = Photo.objects.select_related("gallery__shoot__client")
         if user.role == User.ROLE_PHOTOGRAPHER:
-            return qs.filter(gallery__shoot__client__photographer=user)
-        return qs.filter(gallery__shoot__client__user=user)
+            qs = qs.filter(gallery__shoot__client__photographer=user)
+        else:
+            qs = qs.filter(gallery__shoot__client__user=user)
+        if self.action == "list":
+            gallery_id = self.request.query_params.get("gallery")
+            if gallery_id:
+                qs = qs.filter(gallery_id=gallery_id)
+        return qs

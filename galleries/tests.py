@@ -157,6 +157,13 @@ class GalleryAccessTests(TestCase):
         self.assertFalse(Gallery.objects.filter(pk=self.gallery_ana.pk).exists())
         self.assertFalse(Photo.objects.filter(pk=self.photo_ana.pk).exists())
 
+    def test_list_filter_by_shoot(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.get(f"/api/galleries/?shoot={self.shoot_ana.pk}")
+        self.assertEqual(response.data["count"], 1)
+        response = self.api.get(f"/api/galleries/?shoot={self.shoot_beto.pk}")
+        self.assertEqual(response.data["count"], 0)
+
 
 class PhotoAccessTests(TestCase):
     @classmethod
@@ -277,3 +284,10 @@ class PhotoAccessTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.photo_ana.refresh_from_db()
         self.assertEqual(self.photo_ana.caption, "Editada")
+
+    def test_list_filter_by_gallery(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.get(f"/api/photos/?gallery={self.gallery_ana.pk}")
+        self.assertEqual(response.data["count"], 1)
+        response = self.api.get("/api/photos/?gallery=9999")
+        self.assertEqual(response.data["count"], 0)

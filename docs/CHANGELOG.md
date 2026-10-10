@@ -39,4 +39,5 @@
 - Added `galleries` module: `Gallery` (OneToOne per shoot, manual creation) and `Photo`
   (placeholder URL), private access (photographer CRUD own / customer read-only own),
   Spanish unique-validator message (129 passing total)
+- Added gallery filters `?shoot=` and `?gallery=` (131 passing total)
 - Next: Phase 3, upload to Cloudflare R2 with signed URLs

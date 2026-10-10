@@ -49,9 +49,9 @@ Private: only the photographer of the shoot and that shoot's customer can access
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/galleries/` | Photographer: own galleries / Customer: own galleries |
+| GET | `/api/galleries/` | Photographer: own galleries / Customer: own galleries (filter: `?shoot=`) |
 | POST | `/api/galleries/` | Photographer creates a gallery for one of their shoots (unique per shoot) |
-| GET | `/api/photos/` | Same access rules as galleries |
+| GET | `/api/photos/` | Same access rules as galleries (filter: `?gallery=`) |
 | POST | `/api/photos/` | Photographer adds a photo to their own gallery |
 
 ## Run locally
