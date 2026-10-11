@@ -83,7 +83,8 @@ must never be selectable by the user. Use a custom permission `IsPhotographer`
 - JWT auth with `djangorestframework-simplejwt`
 - Custom user model (`AUTH_USER_MODEL = "users.User"`)
 - SQLite locally, PostgreSQL in production (`dj-database-url`, `DATABASE_URL`), on Railway or Neon
-- Cloudflare R2 with `django-storages` and signed URLs for photos
+- Cloudinary for photo storage (SDK uploads + URLs); local `media/` fallback, switchable
+  to any S3-compatible provider
 - Celery + Redis for thumbnails and emails
 - Django Channels (WebSockets), Docker, a payments provider
 
@@ -154,10 +155,10 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 + Phase 2 complete (steps 6-11) + Phase 3 step 12 — `galleries`
-  (`Gallery` OneToOne per shoot, `Photo`, private access: photographer CRUD own, customer
-  read-only own) (129 tests passing).
-- Now: Phase 3, step 13 — upload to Cloudflare R2 with signed URLs (`django-storages`).
+- Done: Phase 1 + Phase 2 complete (steps 6-11) + Phase 3 steps 12-13 — `galleries`
+  (private access, filters) and real photo uploads (Cloudinary SDK with local fallback,
+  tests network-isolated) (132 tests passing).
+- Now: Phase 3, step 14 — private gallery link for the customer.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

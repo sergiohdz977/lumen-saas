@@ -2,6 +2,7 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from shoots.models import Shoot
 from .models import Gallery, Photo
+from .storage import store_image
 
 
 class GallerySerializer(serializers.ModelSerializer):
@@ -33,10 +34,33 @@ class GallerySerializer(serializers.ModelSerializer):
 
 
 class PhotoSerializer(serializers.ModelSerializer):
+    image = serializers.FileField()
+
     class Meta:
         model = Photo
         fields = ["id", "gallery", "image", "caption", "created_at"]
         read_only_fields = ["id", "created_at"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["image"] = instance.image
+        return data
+
+    def create(self, validated_data):
+        image_file = validated_data.pop("image")
+        return Photo.objects.create(
+            image=store_image(image_file), **validated_data
+        )
+
+    def update(self, instance, validated_data):
+        image_file = validated_data.pop("image", None)
+        if image_file:
+            instance.image = store_image(image_file)
+        for field in ("gallery", "caption"):
+            if field in validated_data:
+                setattr(instance, field, validated_data[field])
+        instance.save()
+        return instance
 
     def validate_gallery(self, value):
         if value.shoot.client.photographer != self.context["request"].user:

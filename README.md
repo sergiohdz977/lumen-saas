@@ -52,7 +52,7 @@ Private: only the photographer of the shoot and that shoot's customer can access
 | GET | `/api/galleries/` | Photographer: own galleries / Customer: own galleries (filter: `?shoot=`) |
 | POST | `/api/galleries/` | Photographer creates a gallery for one of their shoots (unique per shoot) |
 | GET | `/api/photos/` | Same access rules as galleries (filter: `?gallery=`) |
-| POST | `/api/photos/` | Photographer adds a photo to their own gallery |
+| POST | `/api/photos/` | Photographer adds a photo: `multipart/form-data` with `gallery`, `image` (file) and optional `caption` |
 
 ## Run locally
 

@@ -1,3 +1,4 @@
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -6,6 +7,12 @@ from clients.models import Client
 from shoots.models import Shoot
 from users.models import User
 from .models import Gallery, Photo
+
+
+def fake_image(name="foto.jpg"):
+    return SimpleUploadedFile(
+        name, b"\xff\xd8\xff\xe0fakejpegbytes", content_type="image/jpeg"
+    )
 
 
 class GalleryAccessTests(TestCase):
@@ -231,11 +238,24 @@ class PhotoAccessTests(TestCase):
         self.api.force_authenticate(self.ana)
         response = self.api.post(
             "/api/photos/",
-            {"gallery": self.gallery_ana.pk, "image": "https://example.com/n.jpg"},
-            format="json",
+            {"gallery": self.gallery_ana.pk, "image": fake_image()},
+            format="multipart",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Photo.objects.count(), 2)
+        photo = Photo.objects.get(caption="")
+        self.assertTrue(photo.image)
+        self.assertTrue(photo.image.startswith("/media/"))
+
+    def test_image_is_required_on_create(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/photos/",
+            {"gallery": self.gallery_ana.pk},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("image", response.data)
 
     def test_photographer_cannot_add_photo_to_others_gallery(self):
         beto_profile_shoot_client = Client.objects.create(
@@ -251,8 +271,8 @@ class PhotoAccessTests(TestCase):
         self.api.force_authenticate(self.ana)
         response = self.api.post(
             "/api/photos/",
-            {"gallery": beto_gallery.pk, "image": "https://example.com/hack.jpg"},
-            format="json",
+            {"gallery": beto_gallery.pk, "image": fake_image("hack.jpg")},
+            format="multipart",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Photo.objects.count(), 1)

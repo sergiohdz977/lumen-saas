@@ -40,4 +40,7 @@
   (placeholder URL), private access (photographer CRUD own / customer read-only own),
   Spanish unique-validator message (129 passing total)
 - Added gallery filters `?shoot=` and `?gallery=` (131 passing total)
-- Next: Phase 3, upload to Cloudflare R2 with signed URLs
+- Step 13 — real photo uploads: `Photo.image` accepts a file (`multipart`), stored in
+  Cloudinary when credentials are configured (`.env`) with automatic local fallback;
+  tests isolated from the network (132 passing total)
+- Next: Phase 3, private gallery link for the customer
