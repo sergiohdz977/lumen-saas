@@ -18,14 +18,16 @@ class GallerySerializer(serializers.ModelSerializer):
     shoot_title = serializers.CharField(
         source="shoot.title", read_only=True
     )
-    client_username = serializers.CharField(
-        source="shoot.client.user.username", read_only=True
-    )
+    client_username = serializers.SerializerMethodField()
 
     class Meta:
         model = Gallery
         fields = ["id", "shoot", "shoot_title", "client_username", "created_at"]
         read_only_fields = ["id", "shoot_title", "client_username", "created_at"]
+
+    def get_client_username(self, obj):
+        user = obj.shoot.client.user
+        return user.username if user else None
 
     def validate_shoot(self, value):
         if value.client.photographer != self.context["request"].user:

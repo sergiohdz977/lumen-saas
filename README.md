@@ -53,6 +53,8 @@ Private: only the photographer of the shoot and that shoot's customer can access
 | POST | `/api/galleries/` | Photographer creates a gallery for one of their shoots (unique per shoot) |
 | GET | `/api/photos/` | Same access rules as galleries (filter: `?gallery=`) |
 | POST | `/api/photos/` | Photographer adds a photo: `multipart/form-data` with `gallery`, `image` (file) and optional `caption` |
+| POST | `/api/galleries/{id}/share-link/` | Photographer generates a signed share link for a customer (valid 7 days) |
+| GET | `/api/gallery-view/{token}/` | Public: open gallery + photos with the share link, no login required |
 
 ## Run locally
 

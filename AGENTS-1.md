@@ -155,10 +155,11 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 + Phase 2 complete (steps 6-11) + Phase 3 steps 12-13 — `galleries`
-  (private access, filters) and real photo uploads (Cloudinary SDK with local fallback,
-  tests network-isolated) (132 tests passing).
-- Now: Phase 3, step 14 — private gallery link for the customer.
+- Done: Phase 1 + Phase 2 complete (steps 6-11) + Phase 3 steps 12-14 — `galleries`
+  (private access, filters), real photo uploads (Cloudinary SDK with local fallback,
+  tests network-isolated) and signed gallery share links (7-day expiry, public read
+  endpoint, HMAC tokens) (140 tests passing).
+- Now: Phase 3, step 15 — Celery + Redis thumbnails with Pillow.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

@@ -1,9 +1,18 @@
+from django.conf import settings
+from django.core import signing
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import NotFound
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+
 from users.models import User
 from users.permissions import IsPhotographer
 from .models import Gallery, Photo
 from .serializers import GallerySerializer, PhotoSerializer
+
+SHARE_SALT = "galleries.share"
 
 
 class GalleryViewSet(viewsets.ModelViewSet):
@@ -32,6 +41,44 @@ class GalleryViewSet(viewsets.ModelViewSet):
             if shoot_id:
                 qs = qs.filter(shoot_id=shoot_id)
         return qs
+
+    @action(detail=True, methods=["post"], url_path="share-link")
+    def share_link(self, request, pk=None):
+        gallery = self.get_object()
+        token = signing.dumps(str(gallery.pk), salt=SHARE_SALT)
+        url = request.build_absolute_uri(f"/api/gallery-view/{token}/")
+        return Response(
+            {
+                "url": url,
+                "expires_in_days": settings.GALLERY_SHARE_MAX_AGE // 86400,
+            }
+        )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def gallery_view(request, token):
+    try:
+        gallery_id = signing.loads(
+            token,
+            salt=SHARE_SALT,
+            max_age=settings.GALLERY_SHARE_MAX_AGE,
+        )
+    except signing.SignatureExpired:
+        raise NotFound("El enlace ha expirado")
+    except signing.BadSignature:
+        raise NotFound("El enlace no es válido")
+
+    gallery = get_object_or_404(
+        Gallery.objects.select_related("shoot__client", "shoot__client__user"),
+        pk=gallery_id,
+    )
+    return Response(
+        {
+            "gallery": GallerySerializer(gallery).data,
+            "photos": PhotoSerializer(gallery.photos.all(), many=True).data,
+        }
+    )
 
 
 class PhotoViewSet(viewsets.ModelViewSet):

@@ -137,6 +137,9 @@ STATIC_URL = 'static/'
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Signed gallery share links are valid for 7 days
+GALLERY_SHARE_MAX_AGE = 7 * 24 * 60 * 60
+
 # Tests never touch the network: isolated media folder, no Cloudinary
 if "test" in sys.argv:
     MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="lumen_test_media_"))
