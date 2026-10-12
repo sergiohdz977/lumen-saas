@@ -4,7 +4,7 @@ import uuid
 from django.conf import settings
 
 
-def store_image(image_file):
+def store_image(image_file, folder="lumen/photos"):
     """Send an uploaded image to Cloudinary, or to local media as fallback.
 
     Returns the URL where the image can be read. Uses Cloudinary only when
@@ -15,13 +15,13 @@ def store_image(image_file):
 
         result = cloudinary.uploader.upload(
             image_file,
-            folder="lumen/photos",
+            folder=folder,
             resource_type="image",
         )
         return result["secure_url"]
 
     extension = os.path.splitext(image_file.name)[1].lower()
-    name = f"photos/{uuid.uuid4().hex}{extension}"
+    name = f"{folder}/{uuid.uuid4().hex}{extension}"
     destination = os.path.join(settings.MEDIA_ROOT, name)
     os.makedirs(os.path.dirname(destination), exist_ok=True)
     with open(destination, "wb") as handle:

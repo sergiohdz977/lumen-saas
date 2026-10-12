@@ -3,6 +3,7 @@ from rest_framework.validators import UniqueValidator
 from shoots.models import Shoot
 from .models import Gallery, Photo
 from .storage import store_image
+from .tasks import generate_thumbnail
 
 
 class GallerySerializer(serializers.ModelSerializer):
@@ -40,8 +41,8 @@ class PhotoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Photo
-        fields = ["id", "gallery", "image", "caption", "created_at"]
-        read_only_fields = ["id", "created_at"]
+        fields = ["id", "gallery", "image", "thumbnail", "caption", "created_at"]
+        read_only_fields = ["id", "thumbnail", "created_at"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -50,9 +51,11 @@ class PhotoSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         image_file = validated_data.pop("image")
-        return Photo.objects.create(
+        photo = Photo.objects.create(
             image=store_image(image_file), **validated_data
         )
+        generate_thumbnail.delay(photo.pk)
+        return photo
 
     def update(self, instance, validated_data):
         image_file = validated_data.pop("image", None)
@@ -62,6 +65,8 @@ class PhotoSerializer(serializers.ModelSerializer):
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
         instance.save()
+        if image_file:
+            generate_thumbnail.delay(instance.pk)
         return instance
 
     def validate_gallery(self, value):

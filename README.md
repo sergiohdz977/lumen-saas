@@ -52,7 +52,7 @@ Private: only the photographer of the shoot and that shoot's customer can access
 | GET | `/api/galleries/` | Photographer: own galleries / Customer: own galleries (filter: `?shoot=`) |
 | POST | `/api/galleries/` | Photographer creates a gallery for one of their shoots (unique per shoot) |
 | GET | `/api/photos/` | Same access rules as galleries (filter: `?gallery=`) |
-| POST | `/api/photos/` | Photographer adds a photo: `multipart/form-data` with `gallery`, `image` (file) and optional `caption` |
+| POST | `/api/photos/` | Photographer adds a photo: `multipart/form-data` with `gallery`, `image` (file) and optional `caption`. The response includes `thumbnail` (empty until the Celery worker generates it) |
 | POST | `/api/galleries/{id}/share-link/` | Photographer generates a signed share link for a customer (valid 7 days) |
 | GET | `/api/gallery-view/{token}/` | Public: open gallery + photos with the share link, no login required |
 
@@ -61,4 +61,11 @@ Private: only the photographer of the shoot and that shoot's customer can access
 ```bash
 python manage.py migrate
 python manage.py runserver
+```
+
+Background tasks (thumbnails) need Redis/Memurai running and a Celery worker
+(in a second terminal; Windows requires the `solo` pool):
+
+```bash
+venv\Scripts\celery.exe -A config worker --pool=solo -l info
 ```

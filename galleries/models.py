@@ -23,6 +23,7 @@ class Photo(models.Model):
         related_name="photos",
     )
     image = models.URLField(max_length=500, blank=True)
+    thumbnail = models.URLField(max_length=500, blank=True)
     caption = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

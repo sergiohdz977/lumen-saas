@@ -44,4 +44,6 @@
   Cloudinary when credentials are configured (`.env`) with automatic local fallback;
   tests isolated from the network (132 passing total)
 - Step 14 - private gallery share links: photographer generates a signed expiring link (`POST /api/galleries/{id}/share-link/`); anyone with the link opens gallery + photos without login at `GET /api/gallery-view/<token>/` (7-day expiry, tamper-proof HMAC token; `client_username` now null-safe for clients without an account) (140 passing total)
-- Next: Phase 3, step 15 - Celery + Redis thumbnails with Pillow
+- Step 15 - background thumbnails: Celery + Redis/Memurai broker, `Photo.thumbnail` field, `generate_thumbnail` task (Pillow resize to 400px, fired on upload and on image replace, failures logged never raised); tests run tasks eagerly with no broker (146 passing total)
+- Next: Phase 3, step 16 - emails: booking confirmation and gallery delivery
+

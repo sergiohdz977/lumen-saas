@@ -140,9 +140,15 @@ MEDIA_ROOT = BASE_DIR / "media"
 # Signed gallery share links are valid for 7 days
 GALLERY_SHARE_MAX_AGE = 7 * 24 * 60 * 60
 
-# Tests never touch the network: isolated media folder, no Cloudinary
+# Celery: background tasks (thumbnails). Broker is Redis or Memurai.
+CELERY_BROKER_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+
+# Tests never touch the network: isolated media folder, no Cloudinary,
+# and Celery runs tasks inline (no broker needed).
 if "test" in sys.argv:
     MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="lumen_test_media_"))
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
 
 # Cloudinary photo storage. With no credentials the project falls back
 # to local storage (see galleries/storage.py).

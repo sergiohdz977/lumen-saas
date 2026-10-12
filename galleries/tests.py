@@ -1,5 +1,10 @@
+from io import BytesIO
+from pathlib import Path
+
+from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+from PIL import Image
 from rest_framework.test import APIClient
 from rest_framework import status
 
@@ -7,11 +12,14 @@ from clients.models import Client
 from shoots.models import Shoot
 from users.models import User
 from .models import Gallery, Photo
+from .tasks import generate_thumbnail
 
 
-def fake_image(name="foto.jpg"):
+def fake_image(name="foto.jpg", size=(800, 600)):
+    buffer = BytesIO()
+    Image.new("RGB", size, (180, 40, 40)).save(buffer, format="JPEG")
     return SimpleUploadedFile(
-        name, b"\xff\xd8\xff\xe0fakejpegbytes", content_type="image/jpeg"
+        name, buffer.getvalue(), content_type="image/jpeg"
     )
 
 
@@ -434,3 +442,108 @@ class ShareLinkTests(TestCase):
         response = anonymous.get(response.data["url"])
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIsNone(response.data["gallery"]["client_username"])
+
+
+class ThumbnailTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.client_maria = Client.objects.create(
+            photographer=cls.ana, user=cls.maria, name="Maria F"
+        )
+        cls.shoot_ana = Shoot.objects.create(
+            client=cls.client_maria,
+            title="Boda de Maria",
+            shoot_type="boda",
+            date="2026-11-20T10:00:00Z",
+        )
+        cls.gallery_ana = Gallery.objects.create(shoot=cls.shoot_ana)
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def _upload(self, image=None):
+        self.api.force_authenticate(self.ana)
+        return self.api.post(
+            "/api/photos/",
+            {"gallery": self.gallery_ana.pk, "image": image or fake_image()},
+            format="multipart",
+        )
+
+    def _thumbnail_path(self, photo):
+        relative = photo.thumbnail.removeprefix(settings.MEDIA_URL)
+        return Path(settings.MEDIA_ROOT) / relative
+
+    def test_upload_generates_thumbnail_in_background(self):
+        response = self._upload()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("thumbnail", response.data)
+        photo = Photo.objects.get(pk=response.data["id"])
+        self.assertTrue(photo.thumbnail)
+        self.assertTrue(photo.thumbnail.startswith("/media/"))
+        self.assertTrue(self._thumbnail_path(photo).exists())
+
+    def test_thumbnail_is_resized_to_max_width_400(self):
+        response = self._upload()
+        photo = Photo.objects.get(pk=response.data["id"])
+        with Image.open(self._thumbnail_path(photo)) as thumb:
+            self.assertEqual(thumb.format, "JPEG")
+            self.assertEqual(thumb.width, 400)
+            self.assertEqual(thumb.height, 300)
+
+    def test_replacing_image_regenerates_thumbnail(self):
+        response = self._upload()
+        photo = Photo.objects.get(pk=response.data["id"])
+        old_thumbnail = photo.thumbnail
+        self.api.force_authenticate(self.ana)
+        patch = self.api.patch(
+            f"/api/photos/{photo.pk}/",
+            {"image": fake_image("otra.jpg")},
+            format="multipart",
+        )
+        self.assertEqual(patch.status_code, status.HTTP_200_OK)
+        photo.refresh_from_db()
+        self.assertTrue(photo.thumbnail)
+        self.assertNotEqual(photo.thumbnail, old_thumbnail)
+        with Image.open(self._thumbnail_path(photo)) as thumb:
+            self.assertEqual(thumb.width, 400)
+
+    def test_caption_update_keeps_thumbnail(self):
+        response = self._upload()
+        photo = Photo.objects.get(pk=response.data["id"])
+        old_thumbnail = photo.thumbnail
+        self.api.force_authenticate(self.ana)
+        patch = self.api.patch(
+            f"/api/photos/{photo.pk}/",
+            {"caption": "Solo texto"},
+            format="json",
+        )
+        self.assertEqual(patch.status_code, status.HTTP_200_OK)
+        photo.refresh_from_db()
+        self.assertEqual(photo.thumbnail, old_thumbnail)
+        self.assertEqual(photo.caption, "Solo texto")
+
+    def test_broken_image_still_uploads_without_thumbnail(self):
+        response = self._upload(
+            SimpleUploadedFile(
+                "rota.jpg", b"\xff\xd8\xff\xe0esto no es jpeg",
+                content_type="image/jpeg",
+            )
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        photo = Photo.objects.get(pk=response.data["id"])
+        self.assertEqual(photo.thumbnail, "")
+
+    def test_task_ignores_missing_photo(self):
+        self.assertIsNone(generate_thumbnail(99999))
