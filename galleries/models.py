@@ -27,8 +27,10 @@ class Photo(models.Model):
     )
     image = models.URLField(max_length=500, blank=True)
     thumbnail = models.URLField(max_length=500, blank=True)
+    preview = models.URLField(max_length=500, blank=True)
     caption = models.CharField(max_length=200, blank=True)
     download_count = models.PositiveIntegerField(default=0)
+    light_download_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

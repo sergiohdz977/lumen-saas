@@ -53,9 +53,9 @@ Private: only the photographer of the shoot and that shoot's customer can access
 | POST | `/api/galleries/` | Photographer creates a gallery for one of their shoots (unique per shoot) |
 | GET | `/api/photos/` | Same access rules as galleries (filter: `?gallery=`) |
 | POST | `/api/photos/` | Photographer adds a photo: `multipart/form-data` with `gallery`, `image` (file) and optional `caption`. The response includes `thumbnail` (empty until the Celery worker generates it) |
-| POST | `/api/photos/{id}/download/` | Anyone who can view the photo registers a download (`download_count` +1) |
+| POST | `/api/photos/{id}/download/` | Register a download: `{"version": "light"}` (HD preview) or `{"version": "original"}` (default). Separate counters per version |
 | POST | `/api/favorites/` | Customer favorites a photo of their own gallery (`{"photo": id}`) |
-| GET | `/api/favorites/` | Customer lists their favorites |
+| GET | `/api/favorites/` | Customer: their favorites / Photographer: client favorites on their own photos (with `customer_username` and thumbnail). Filter: `?photo=` |
 | DELETE | `/api/favorites/{id}/` | Customer removes a favorite |
 | POST | `/api/galleries/{id}/share-link/` | Photographer generates a signed share link for a customer (valid 7 days) |
 | GET | `/api/gallery-view/{token}/` | Public: open gallery + photos with the share link, no login required |

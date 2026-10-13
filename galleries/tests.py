@@ -13,10 +13,10 @@ from clients.models import Client
 from shoots.models import Shoot
 from users.models import User
 from .models import Favorite, Gallery, Photo
-from .tasks import generate_thumbnail
+from .tasks import generate_photo_variants
 
 
-def fake_image(name="foto.jpg", size=(800, 600)):
+def fake_image(name="foto.jpg", size=(1600, 1200)):
     buffer = BytesIO()
     Image.new("RGB", size, (180, 40, 40)).save(buffer, format="JPEG")
     return SimpleUploadedFile(
@@ -482,9 +482,12 @@ class ThumbnailTests(TestCase):
             format="multipart",
         )
 
-    def _thumbnail_path(self, photo):
-        relative = photo.thumbnail.removeprefix(settings.MEDIA_URL)
+    def _variant_path(self, url):
+        relative = url.removeprefix(settings.MEDIA_URL)
         return Path(settings.MEDIA_ROOT) / relative
+
+    def _thumbnail_path(self, photo):
+        return self._variant_path(photo.thumbnail)
 
     def test_upload_generates_thumbnail_in_background(self):
         response = self._upload()
@@ -494,6 +497,16 @@ class ThumbnailTests(TestCase):
         self.assertTrue(photo.thumbnail)
         self.assertTrue(photo.thumbnail.startswith("/media/"))
         self.assertTrue(self._thumbnail_path(photo).exists())
+
+    def test_upload_generates_hd_preview(self):
+        response = self._upload()
+        photo = Photo.objects.get(pk=response.data["id"])
+        self.assertTrue(photo.preview)
+        self.assertTrue(self._variant_path(photo.preview).exists())
+        with Image.open(self._variant_path(photo.preview)) as preview:
+            self.assertEqual(preview.format, "JPEG")
+            self.assertEqual(preview.width, 1280)
+            self.assertEqual(preview.height, 960)
 
     def test_thumbnail_is_resized_to_max_width_400(self):
         response = self._upload()
@@ -547,7 +560,7 @@ class ThumbnailTests(TestCase):
         self.assertEqual(photo.thumbnail, "")
 
     def test_task_ignores_missing_photo(self):
-        self.assertIsNone(generate_thumbnail(99999))
+        self.assertIsNone(generate_photo_variants(99999))
 
 
 class GalleryDeliveryEmailTests(TestCase):
@@ -729,6 +742,116 @@ class FavoritesTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
+class PhotographerFavoriteVisibilityTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.beto = User.objects.create_user(
+            username="beto",
+            email="beto@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.pedro = User.objects.create_user(
+            username="pedro",
+            email="pedro@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.client_maria = Client.objects.create(
+            photographer=cls.ana, user=cls.maria, name="Maria F"
+        )
+        cls.client_pedro = Client.objects.create(
+            photographer=cls.beto, user=cls.pedro, name="Pedro F"
+        )
+        cls.shoot_ana = Shoot.objects.create(
+            client=cls.client_maria,
+            title="Boda de Maria",
+            shoot_type="boda",
+            date="2026-11-20T10:00:00Z",
+        )
+        cls.shoot_beto = Shoot.objects.create(
+            client=cls.client_pedro,
+            title="Retrato de Pedro",
+            shoot_type="retrato",
+            date="2026-11-21T10:00:00Z",
+        )
+        cls.gallery_ana = Gallery.objects.create(shoot=cls.shoot_ana)
+        cls.gallery_beto = Gallery.objects.create(shoot=cls.shoot_beto)
+        cls.photo_ana = Photo.objects.create(
+            gallery=cls.gallery_ana,
+            image="https://example.com/foto-ana.jpg",
+            thumbnail="https://example.com/thumb-ana.jpg",
+            caption="Ceremonia",
+        )
+        cls.photo_beto = Photo.objects.create(
+            gallery=cls.gallery_beto,
+            image="https://example.com/foto-beto.jpg",
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def _favorite(self, user, photo):
+        self.api.force_authenticate(user)
+        return self.api.post(
+            "/api/favorites/", {"photo": photo.pk}, format="json"
+        )
+
+    def test_photographer_sees_client_favorites_with_details(self):
+        self._favorite(self.maria, self.photo_ana)
+        self.api.force_authenticate(self.ana)
+        response = self.api.get("/api/favorites/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        item = response.data["results"][0]
+        self.assertEqual(item["customer_username"], "maria")
+        self.assertEqual(item["photo_caption"], "Ceremonia")
+        self.assertEqual(
+            item["photo_thumbnail"], "https://example.com/thumb-ana.jpg"
+        )
+
+    def test_photographer_does_not_see_other_photographers_favorites(self):
+        self._favorite(self.pedro, self.photo_beto)
+        self.api.force_authenticate(self.ana)
+        response = self.api.get("/api/favorites/")
+        self.assertEqual(response.data["count"], 0)
+
+    def test_photographer_cannot_delete_clients_favorite(self):
+        created = self._favorite(self.maria, self.photo_ana)
+        self.api.force_authenticate(self.ana)
+        response = self.api.delete(f"/api/favorites/{created.data['id']}/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_customer_list_includes_thumbnail(self):
+        self._favorite(self.maria, self.photo_ana)
+        self.api.force_authenticate(self.maria)
+        response = self.api.get("/api/favorites/")
+        self.assertEqual(
+            response.data["results"][0]["photo_thumbnail"],
+            "https://example.com/thumb-ana.jpg",
+        )
+
+    def test_list_filter_by_photo(self):
+        self._favorite(self.maria, self.photo_ana)
+        self.api.force_authenticate(self.ana)
+        response = self.api.get(f"/api/favorites/?photo={self.photo_ana.pk}")
+        self.assertEqual(response.data["count"], 1)
+        response = self.api.get(f"/api/favorites/?photo={self.photo_beto.pk}")
+        self.assertEqual(response.data["count"], 0)
+
+
 class PhotoDownloadTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -773,6 +896,40 @@ class PhotoDownloadTests(TestCase):
         response = self.api.post(f"/api/photos/{self.photo_ana.pk}/download/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["download_count"], 1)
+        self.assertEqual(response.data["light_download_count"], 0)
+
+    def test_light_and_original_downloads_count_separately(self):
+        self.api.force_authenticate(self.maria)
+        self.api.post(
+            f"/api/photos/{self.photo_ana.pk}/download/",
+            {"version": "light"},
+            format="json",
+        )
+        self.api.post(
+            f"/api/photos/{self.photo_ana.pk}/download/",
+            {"version": "light"},
+            format="json",
+        )
+        response = self.api.post(
+            f"/api/photos/{self.photo_ana.pk}/download/",
+            {"version": "original"},
+            format="json",
+        )
+        self.assertEqual(response.data["light_download_count"], 2)
+        self.assertEqual(response.data["download_count"], 1)
+        self.photo_ana.refresh_from_db()
+        self.assertEqual(self.photo_ana.light_download_count, 2)
+        self.assertEqual(self.photo_ana.download_count, 1)
+
+    def test_invalid_download_version_is_rejected(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            f"/api/photos/{self.photo_ana.pk}/download/",
+            {"version": "gold"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Versión no válida", str(response.data))
 
     def test_downloads_accumulate(self):
         self.api.force_authenticate(self.maria)

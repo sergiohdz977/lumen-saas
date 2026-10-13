@@ -16,7 +16,11 @@ from .storage import store_image
 
 logger = logging.getLogger(__name__)
 
-THUMBNAIL_MAX_WIDTH = 400
+# (model field, storage folder, max width in px, JPEG quality)
+PHOTO_VARIANTS = (
+    ("thumbnail", "lumen/thumbnails", 400, 85),
+    ("preview", "lumen/previews", 1280, 85),
+)
 
 
 def _open_image(source):
@@ -29,33 +33,39 @@ def _open_image(source):
 
 
 @shared_task
-def generate_thumbnail(photo_id):
-    """Resize the photo to a small JPEG and store its URL on Photo.thumbnail.
+def generate_photo_variants(photo_id):
+    """Build the thumbnail and the HD preview, then store their URLs.
 
-    Runs in the background (Celery worker). Never raises: a broken image
-    must not break the upload pipeline, so failures are only logged.
+    The original file is opened once and resized twice. Runs in the
+    background (Celery worker). Never raises: a broken image must not
+    break the upload pipeline, so failures are only logged.
     """
     photo = Photo.objects.filter(pk=photo_id).first()
     if photo is None or not photo.image:
         return None
     try:
         with _open_image(photo.image) as original:
-            image = original.convert("RGB")
-            image.thumbnail((THUMBNAIL_MAX_WIDTH, THUMBNAIL_MAX_WIDTH))
-            buffer = BytesIO()
-            image.save(buffer, format="JPEG", quality=85)
+            rgb = original.convert("RGB")
+            urls = {}
+            for field, folder, max_width, quality in PHOTO_VARIANTS:
+                image = rgb.copy()
+                image.thumbnail((max_width, max_width))
+                buffer = BytesIO()
+                image.save(buffer, format="JPEG", quality=quality)
+                upload = SimpleUploadedFile(
+                    f"{field}-{uuid.uuid4().hex}.jpg",
+                    buffer.getvalue(),
+                    content_type="image/jpeg",
+                )
+                urls[field] = store_image(upload, folder=folder)
     except Exception:
-        logger.exception("Thumbnail generation failed for photo %s", photo_id)
+        logger.exception(
+            "Photo variants generation failed for photo %s", photo_id
+        )
         return None
 
-    upload = SimpleUploadedFile(
-        f"thumbnail-{uuid.uuid4().hex}.jpg",
-        buffer.getvalue(),
-        content_type="image/jpeg",
-    )
-    photo.thumbnail = store_image(upload, folder="lumen/thumbnails")
-    photo.save(update_fields=["thumbnail"])
-    return photo.thumbnail
+    Photo.objects.filter(pk=photo.pk).update(**urls)
+    return urls
 
 
 @shared_task

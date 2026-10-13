@@ -3,7 +3,7 @@ from rest_framework.validators import UniqueValidator
 from shoots.models import Shoot
 from .models import Favorite, Gallery, Photo
 from .storage import store_image
-from .tasks import generate_thumbnail, gallery_ready_email
+from .tasks import generate_photo_variants, gallery_ready_email
 
 
 class GallerySerializer(serializers.ModelSerializer):
@@ -47,10 +47,13 @@ class PhotoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Photo
         fields = [
-            "id", "gallery", "image", "thumbnail",
-            "caption", "download_count", "created_at",
+            "id", "gallery", "image", "thumbnail", "preview",
+            "caption", "download_count", "light_download_count", "created_at",
         ]
-        read_only_fields = ["id", "thumbnail", "download_count", "created_at"]
+        read_only_fields = [
+            "id", "thumbnail", "preview",
+            "download_count", "light_download_count", "created_at",
+        ]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -62,7 +65,7 @@ class PhotoSerializer(serializers.ModelSerializer):
         photo = Photo.objects.create(
             image=store_image(image_file), **validated_data
         )
-        generate_thumbnail.delay(photo.pk)
+        generate_photo_variants.delay(photo.pk)
         return photo
 
     def update(self, instance, validated_data):
@@ -74,7 +77,7 @@ class PhotoSerializer(serializers.ModelSerializer):
                 setattr(instance, field, validated_data[field])
         instance.save()
         if image_file:
-            generate_thumbnail.delay(instance.pk)
+            generate_photo_variants.delay(instance.pk)
         return instance
 
     def validate_gallery(self, value):
@@ -87,10 +90,22 @@ class PhotoSerializer(serializers.ModelSerializer):
 
 class FavoriteSerializer(serializers.ModelSerializer):
     photo = serializers.PrimaryKeyRelatedField(queryset=Photo.objects.all())
+    photo_caption = serializers.CharField(
+        source="photo.caption", read_only=True
+    )
+    photo_thumbnail = serializers.CharField(
+        source="photo.thumbnail", read_only=True
+    )
+    customer_username = serializers.CharField(
+        source="user.username", read_only=True
+    )
 
     class Meta:
         model = Favorite
-        fields = ["id", "photo", "created_at"]
+        fields = [
+            "id", "photo", "photo_caption", "photo_thumbnail",
+            "customer_username", "created_at",
+        ]
         read_only_fields = ["id", "created_at"]
 
     def validate_photo(self, value):

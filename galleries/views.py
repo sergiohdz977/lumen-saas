@@ -4,7 +4,7 @@ from django.db.models import F
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -108,25 +108,50 @@ class PhotoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def download(self, request, pk=None):
         photo = self.get_object()
-        Photo.objects.filter(pk=photo.pk).update(
-            download_count=F("download_count") + 1
+        version = request.data.get("version", "original")
+        if version == "light":
+            counter = "light_download_count"
+        elif version == "original":
+            counter = "download_count"
+        else:
+            raise ValidationError("Versión no válida: usa 'light' u 'original'")
+        Photo.objects.filter(pk=photo.pk).update(**{counter: F(counter) + 1})
+        photo.refresh_from_db(
+            fields=["download_count", "light_download_count"]
         )
-        photo.refresh_from_db(fields=["download_count"])
-        return Response({"download_count": photo.download_count})
+        return Response(
+            {
+                "download_count": photo.download_count,
+                "light_download_count": photo.light_download_count,
+            }
+        )
 
 
 class FavoriteViewSet(viewsets.ModelViewSet):
     serializer_class = FavoriteSerializer
-    permission_classes = [IsAuthenticated, IsCustomer]
+    permission_classes = [IsAuthenticated]
     queryset = Favorite.objects.all()
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsCustomer()]
 
     def get_queryset(self):
         user = self.request.user
         if not user.is_authenticated:
             return Favorite.objects.none()
-        return Favorite.objects.select_related(
-            "photo__gallery__shoot__client"
-        ).filter(user=user)
+        qs = Favorite.objects.select_related(
+            "photo", "user", "photo__gallery__shoot__client"
+        )
+        if user.role == User.ROLE_PHOTOGRAPHER:
+            qs = qs.filter(photo__gallery__shoot__client__photographer=user)
+        else:
+            qs = qs.filter(user=user)
+        photo_id = self.request.query_params.get("photo")
+        if photo_id:
+            qs = qs.filter(photo_id=photo_id)
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

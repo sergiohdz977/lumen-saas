@@ -155,10 +155,11 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 + Phase 2 complete (steps 6-11) + Phase 3 steps 12-16 + favorites and
-  downloads (private galleries with Cloudinary uploads, signed share links, background
-  thumbnails and emails via Celery, `Favorite` model, atomic `download_count`)
-  (166 tests passing).
+- Done: Phase 1 + Phase 2 complete (steps 6-11) + Phase 3 steps 12-16 + favorites,
+  downloads and photo variants (private galleries with Cloudinary uploads, signed
+  share links, background HD preview + thumbnails via Celery, background emails,
+  `Favorite` model, separate light/original download counters)
+  (169 tests passing).
 - Now: Phase 3, step 17b — `Review` model.
 
 ## Conventions

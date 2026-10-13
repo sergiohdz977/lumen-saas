@@ -47,7 +47,10 @@
 - Step 15 - background thumbnails: Celery + Redis/Memurai broker, `Photo.thumbnail` field, `generate_thumbnail` task (Pillow resize to 400px, fired on upload and on image replace, failures logged never raised); tests run tasks eagerly with no broker (146 passing total)
 - Step 16 - emails in background (Celery): booking accepted confirmation to the customer; gallery delivered email with private share link; console backend in dev (prints to terminal), locmem in tests; fixed bogus MAILERS setting into real EMAIL_BACKEND (153 passing total)
 - Step 17a - favorites and downloads: `Favorite` model (unique photo+user, customer-only endpoints, own-gallery validation) and atomic `download_count` increments via `POST /api/photos/{id}/download/` (166 passing total)
+- Step 17c - photo variants: HD `preview` (1280px) generated together with the thumbnail in one Celery task; downloads accept a version (`light` or `original`) with separate counters (169 passing total)
+- Step 17d - favorites visibility: photographers list client favorites on their own photos (with customer username and thumbnail, `?photo=` filter); deleting stays customer-only (174 passing total)
 - Next: Phase 3, step 17b - `Review` model
+
 
 
 
