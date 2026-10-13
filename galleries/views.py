@@ -9,17 +9,15 @@ from rest_framework.response import Response
 
 from users.models import User
 from users.permissions import IsPhotographer
-from .models import Gallery, Photo
+from .models import Gallery, Photo, SHARE_SALT
 from .serializers import GallerySerializer, PhotoSerializer
-
-SHARE_SALT = "galleries.share"
 
 
 class GalleryViewSet(viewsets.ModelViewSet):
     serializer_class = GallerySerializer
     permission_classes = [IsAuthenticated]
     queryset = Gallery.objects.all()
-
+    
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
             return [IsAuthenticated()]

@@ -63,9 +63,12 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-Background tasks (thumbnails) need Redis/Memurai running and a Celery worker
+Background tasks (thumbnails and emails) need Redis/Memurai running and a Celery worker
 (in a second terminal; Windows requires the `solo` pool):
 
 ```bash
 venv\Scripts\celery.exe -A config worker --pool=solo -l info
 ```
+
+Emails are printed to the worker terminal in development (console backend):
+booking accept and gallery delivery send a message with a private share link.

@@ -1,5 +1,6 @@
 from datetime import datetime, timezone as dt_timezone
 
+from django.core import mail
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -539,3 +540,75 @@ class MarketplaceJourneyTests(TestCase):
         self.assertEqual(response.data["status"], "accepted")
         self.assertEqual(Shoot.objects.count(), 1)
         self.assertEqual(Client.objects.count(), 1)
+
+
+class BookingEmailTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.customer = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.ana_profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+            is_published=True,
+        )
+        cls.package = Package.objects.create(
+            profile=cls.ana_profile,
+            title="Boda completa",
+            price=200,
+        )
+        cls.booking = BookingRequest.objects.create(
+            customer=cls.customer,
+            package=cls.package,
+            date=datetime(2026, 11, 20, 10, 0, tzinfo=dt_timezone.utc),
+        )
+        cls.other_booking = BookingRequest.objects.create(
+            customer=cls.customer,
+            package=cls.package,
+            date=datetime(2026, 12, 1, 10, 0, tzinfo=dt_timezone.utc),
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+        self.api.force_authenticate(self.ana)
+
+    def test_accept_sends_confirmation_email(self):
+        response = self.api.post(f"/api/bookings/{self.booking.pk}/accept/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].subject, "Tu reserva fue aceptada")
+        self.assertEqual(mail.outbox[0].to, ["maria@test.com"])
+        self.assertIn("Boda completa", mail.outbox[0].body)
+        self.assertIn("20/11/2026", mail.outbox[0].body)
+
+    def test_reject_sends_no_email(self):
+        response = self.api.post(f"/api/bookings/{self.booking.pk}/reject/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_conflicted_accept_sends_no_extra_email(self):
+        first = self.api.post(f"/api/bookings/{self.booking.pk}/accept/")
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.other_booking.date = self.booking.date
+        self.other_booking.save()
+        second = self.api.post(f"/api/bookings/{self.other_booking.pk}/accept/")
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_customer_without_email_does_not_crash(self):
+        self.customer.email = ""
+        self.customer.save()
+        response = self.api.post(f"/api/bookings/{self.booking.pk}/accept/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 0)

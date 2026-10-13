@@ -156,7 +156,7 @@ CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "")
 if CLOUDINARY_CLOUD_NAME and "test" not in sys.argv:
     import cloudinary
 
-    cloudinary.config(
+    cloudinary.config(  
         cloud_name=CLOUDINARY_CLOUD_NAME,
         api_key=os.getenv("CLOUDINARY_API_KEY", ""),
         api_secret=os.getenv("CLOUDINARY_API_SECRET", ""),
@@ -164,14 +164,11 @@ if CLOUDINARY_CLOUD_NAME and "test" not in sys.argv:
     )
 
 
-# Email
-# https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
-
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
-}
+# Email: console backend prints messages to the terminal in development.
+# Django automatically switches to the locmem backend during tests (mail.outbox).
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = "Lumen <no-reply@lumen.local>"
+SITE_URL = os.getenv("SITE_URL", "http://127.0.0.1:8000")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

@@ -7,9 +7,11 @@ from pathlib import Path
 from celery import shared_task
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.mail import send_mail
+from django.core import signing
 from PIL import Image
 
-from .models import Photo
+from .models import Gallery, Photo, SHARE_SALT
 from .storage import store_image
 
 logger = logging.getLogger(__name__)
@@ -54,3 +56,33 @@ def generate_thumbnail(photo_id):
     photo.thumbnail = store_image(upload, folder="lumen/thumbnails")
     photo.save(update_fields=["thumbnail"])
     return photo.thumbnail
+
+
+@shared_task
+def gallery_ready_email(gallery_id):
+    """Email the customer when a gallery is created (photos delivered)."""
+    gallery = (
+        Gallery.objects.select_related("shoot__client", "shoot__client__user")
+        .filter(pk=gallery_id)
+        .first()
+    )
+    if gallery is None:
+        return None
+    client = gallery.shoot.client
+    to_email = client.user.email if client.user else client.email
+    if not to_email:
+        return None
+    token = signing.dumps(str(gallery.pk), salt=SHARE_SALT)
+    link = f"{settings.SITE_URL}/api/gallery-view/{token}/"
+    send_mail(
+        subject="Tus fotos están listas",
+        message=(
+            f"Hola {client.name},\n\n"
+            f'Tus fotos de "{gallery.shoot.title}" ya están disponibles.\n'
+            f"Enlace privado (válido 7 días): {link}\n\n"
+            "Lumen\n"
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[to_email],
+    )
+    return to_email

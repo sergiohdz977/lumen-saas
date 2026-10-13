@@ -2,6 +2,7 @@ from io import BytesIO
 from pathlib import Path
 
 from django.conf import settings
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from PIL import Image
@@ -547,3 +548,73 @@ class ThumbnailTests(TestCase):
 
     def test_task_ignores_missing_photo(self):
         self.assertIsNone(generate_thumbnail(99999))
+
+
+class GalleryDeliveryEmailTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.client_maria = Client.objects.create(
+            photographer=cls.ana, user=cls.maria, name="Maria F"
+        )
+        cls.shoot_ana = Shoot.objects.create(
+            client=cls.client_maria,
+            title="Boda de Maria",
+            shoot_type="boda",
+            date="2026-11-20T10:00:00Z",
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+        self.api.force_authenticate(self.ana)
+
+    def _create_gallery(self, shoot):
+        return self.api.post(
+            "/api/galleries/", {"shoot": shoot.pk}, format="json"
+        )
+
+    def test_gallery_creation_emails_customer_with_share_link(self):
+        response = self._create_gallery(self.shoot_ana)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].subject, "Tus fotos están listas")
+        self.assertEqual(mail.outbox[0].to, ["maria@test.com"])
+        self.assertIn("/api/gallery-view/", mail.outbox[0].body)
+
+    def test_manual_client_with_email_gets_delivery_email(self):
+        manual = Client.objects.create(
+            photographer=self.ana, name="Manual", email="manual@test.com"
+        )
+        shoot = Shoot.objects.create(
+            client=manual,
+            title="Sesion manual",
+            shoot_type="retrato",
+            date="2026-12-05T10:00:00Z",
+        )
+        response = self._create_gallery(shoot)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["manual@test.com"])
+
+    def test_client_without_any_email_sends_nothing(self):
+        manual = Client.objects.create(photographer=self.ana, name="Sin mail")
+        shoot = Shoot.objects.create(
+            client=manual,
+            title="Sesion sin mail",
+            shoot_type="retrato",
+            date="2026-12-06T10:00:00Z",
+        )
+        response = self._create_gallery(shoot)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(mail.outbox), 0)

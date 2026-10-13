@@ -1,5 +1,7 @@
 from django.db import models
 
+SHARE_SALT = "galleries.share"
+
 
 class Gallery(models.Model):
     shoot = models.OneToOneField(
@@ -15,7 +17,7 @@ class Gallery(models.Model):
     def __str__(self):
         return f"Galeria de {self.shoot.title}"
 
-
+    
 class Photo(models.Model):
     gallery = models.ForeignKey(
         Gallery,

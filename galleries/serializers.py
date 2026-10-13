@@ -3,7 +3,7 @@ from rest_framework.validators import UniqueValidator
 from shoots.models import Shoot
 from .models import Gallery, Photo
 from .storage import store_image
-from .tasks import generate_thumbnail
+from .tasks import generate_thumbnail, gallery_ready_email
 
 
 class GallerySerializer(serializers.ModelSerializer):
@@ -34,6 +34,11 @@ class GallerySerializer(serializers.ModelSerializer):
         if value.client.photographer != self.context["request"].user:
             raise serializers.ValidationError("Esa sesión no es tuya")
         return value
+
+    def create(self, validated_data):
+        gallery = super().create(validated_data)
+        gallery_ready_email.delay(gallery.pk)
+        return gallery
 
 
 class PhotoSerializer(serializers.ModelSerializer):
