@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core import signing
+from django.db.models import F
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -8,9 +9,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from users.models import User
-from users.permissions import IsPhotographer
-from .models import Gallery, Photo, SHARE_SALT
-from .serializers import GallerySerializer, PhotoSerializer
+from users.permissions import IsCustomer, IsPhotographer
+from .models import Favorite, Gallery, Photo, SHARE_SALT
+from .serializers import FavoriteSerializer, GallerySerializer, PhotoSerializer
 
 
 class GalleryViewSet(viewsets.ModelViewSet):
@@ -85,7 +86,7 @@ class PhotoViewSet(viewsets.ModelViewSet):
     queryset = Photo.objects.all()
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve"):
+        if self.action in ("list", "retrieve", "download"):
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsPhotographer()]
 
@@ -103,3 +104,29 @@ class PhotoViewSet(viewsets.ModelViewSet):
             if gallery_id:
                 qs = qs.filter(gallery_id=gallery_id)
         return qs
+
+    @action(detail=True, methods=["post"])
+    def download(self, request, pk=None):
+        photo = self.get_object()
+        Photo.objects.filter(pk=photo.pk).update(
+            download_count=F("download_count") + 1
+        )
+        photo.refresh_from_db(fields=["download_count"])
+        return Response({"download_count": photo.download_count})
+
+
+class FavoriteViewSet(viewsets.ModelViewSet):
+    serializer_class = FavoriteSerializer
+    permission_classes = [IsAuthenticated, IsCustomer]
+    queryset = Favorite.objects.all()
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return Favorite.objects.none()
+        return Favorite.objects.select_related(
+            "photo__gallery__shoot__client"
+        ).filter(user=user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

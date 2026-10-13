@@ -12,7 +12,7 @@ from rest_framework import status
 from clients.models import Client
 from shoots.models import Shoot
 from users.models import User
-from .models import Gallery, Photo
+from .models import Favorite, Gallery, Photo
 from .tasks import generate_thumbnail
 
 
@@ -618,3 +618,184 @@ class GalleryDeliveryEmailTests(TestCase):
         response = self._create_gallery(shoot)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(len(mail.outbox), 0)
+
+
+class FavoritesTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.luis = User.objects.create_user(
+            username="luis",
+            email="luis@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.client_maria = Client.objects.create(
+            photographer=cls.ana, user=cls.maria, name="Maria F"
+        )
+        cls.shoot_ana = Shoot.objects.create(
+            client=cls.client_maria,
+            title="Boda de Maria",
+            shoot_type="boda",
+            date="2026-11-20T10:00:00Z",
+        )
+        cls.gallery_ana = Gallery.objects.create(shoot=cls.shoot_ana)
+        cls.photo_ana = Photo.objects.create(
+            gallery=cls.gallery_ana,
+            image="https://example.com/foto1.jpg",
+            caption="Primera",
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def test_customer_favorites_a_photo(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            "/api/favorites/", {"photo": self.photo_ana.pk}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Favorite.objects.count(), 1)
+
+    def test_photographer_cannot_favorite(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/favorites/", {"photo": self.photo_ana.pk}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_anonymous_cannot_favorite(self):
+        response = self.api.post(
+            "/api/favorites/", {"photo": self.photo_ana.pk}, format="json"
+        )
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
+
+    def test_cannot_favorite_same_photo_twice(self):
+        self.api.force_authenticate(self.maria)
+        self.api.post("/api/favorites/", {"photo": self.photo_ana.pk})
+        response = self.api.post(
+            "/api/favorites/", {"photo": self.photo_ana.pk}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("ya está", str(response.data))
+
+    def test_cannot_favorite_another_customers_photo(self):
+        self.api.force_authenticate(self.luis)
+        response = self.api.post(
+            "/api/favorites/", {"photo": self.photo_ana.pk}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("No puedes", str(response.data))
+
+    def test_customer_lists_only_own_favorites(self):
+        self.api.force_authenticate(self.maria)
+        self.api.post("/api/favorites/", {"photo": self.photo_ana.pk})
+        response = self.api.get("/api/favorites/")
+        self.assertEqual(response.data["count"], 1)
+        self.api.force_authenticate(self.luis)
+        response = self.api.get("/api/favorites/")
+        self.assertEqual(response.data["count"], 0)
+
+    def test_customer_removes_own_favorite(self):
+        self.api.force_authenticate(self.maria)
+        created = self.api.post(
+            "/api/favorites/", {"photo": self.photo_ana.pk}, format="json"
+        )
+        response = self.api.delete(f"/api/favorites/{created.data['id']}/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(Favorite.objects.count(), 0)
+
+    def test_cannot_delete_others_favorite(self):
+        self.api.force_authenticate(self.maria)
+        created = self.api.post(
+            "/api/favorites/", {"photo": self.photo_ana.pk}, format="json"
+        )
+        self.api.force_authenticate(self.luis)
+        response = self.api.delete(f"/api/favorites/{created.data['id']}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class PhotoDownloadTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.luis = User.objects.create_user(
+            username="luis",
+            email="luis@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.client_maria = Client.objects.create(
+            photographer=cls.ana, user=cls.maria, name="Maria F"
+        )
+        cls.shoot_ana = Shoot.objects.create(
+            client=cls.client_maria,
+            title="Boda de Maria",
+            shoot_type="boda",
+            date="2026-11-20T10:00:00Z",
+        )
+        cls.gallery_ana = Gallery.objects.create(shoot=cls.shoot_ana)
+        cls.photo_ana = Photo.objects.create(
+            gallery=cls.gallery_ana,
+            image="https://example.com/foto1.jpg",
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def test_customer_registers_download(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(f"/api/photos/{self.photo_ana.pk}/download/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["download_count"], 1)
+
+    def test_downloads_accumulate(self):
+        self.api.force_authenticate(self.maria)
+        self.api.post(f"/api/photos/{self.photo_ana.pk}/download/")
+        response = self.api.post(f"/api/photos/{self.photo_ana.pk}/download/")
+        self.assertEqual(response.data["download_count"], 2)
+        self.photo_ana.refresh_from_db()
+        self.assertEqual(self.photo_ana.download_count, 2)
+
+    def test_photographer_can_register_download(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(f"/api/photos/{self.photo_ana.pk}/download/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["download_count"], 1)
+
+    def test_other_customer_cannot_register_download(self):
+        self.api.force_authenticate(self.luis)
+        response = self.api.post(f"/api/photos/{self.photo_ana.pk}/download/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_anonymous_download_is_denied(self):
+        response = self.api.post(f"/api/photos/{self.photo_ana.pk}/download/")
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
