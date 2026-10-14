@@ -155,12 +155,12 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 + Phase 2 (steps 6-11) + Phase 3 complete (steps 12-17): private
-  galleries with Cloudinary uploads and HD previews/thumbnails (Celery), signed share
-  links, background emails, favorites (visible to the photographer), separate
-  light/original download counters, and the `reviews` app (customers rate photographers
-  they worked with) (189 tests passing).
-- Now: step 18 — tests for uploads and permissions.
+- Done: Phase 1 + Phase 2 (steps 6-11) + Phase 3 complete (steps 12-17) + step 18
+  (uploads/permissions audit): private galleries with Cloudinary uploads and HD
+  previews/thumbnails (Celery), signed share links, background emails, favorites
+  (visible to the photographer), separate light/original download counters, the
+  `reviews` app, and a hardening test pass (205 tests passing).
+- Now: step 19 — Docker and Docker Compose (Django, PostgreSQL, Redis, Celery).
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

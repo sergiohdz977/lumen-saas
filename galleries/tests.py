@@ -956,3 +956,114 @@ class PhotoDownloadTests(TestCase):
             response.status_code,
             [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
         )
+
+
+class UploadPermissionAuditTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.client_maria = Client.objects.create(
+            photographer=cls.ana, user=cls.maria, name="Maria F"
+        )
+        cls.shoot_ana = Shoot.objects.create(
+            client=cls.client_maria,
+            title="Boda de Maria",
+            shoot_type="boda",
+            date="2026-11-20T10:00:00Z",
+        )
+        cls.gallery_ana = Gallery.objects.create(shoot=cls.shoot_ana)
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def test_anonymous_upload_is_denied(self):
+        response = self.api.post(
+            "/api/photos/",
+            {"gallery": self.gallery_ana.pk, "image": fake_image()},
+            format="multipart",
+        )
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
+
+    def test_upload_requires_gallery_field(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/photos/", {"image": fake_image()}, format="multipart"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("gallery", response.data)
+
+    def test_upload_with_unknown_gallery_is_rejected(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/photos/",
+            {"gallery": 9999, "image": fake_image()},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Photo.objects.count(), 0)
+
+    def test_empty_file_is_rejected_in_spanish(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/photos/",
+            {
+                "gallery": self.gallery_ana.pk,
+                "image": SimpleUploadedFile(
+                    "vacia.jpg", b"", content_type="image/jpeg"
+                ),
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("vacío", str(response.data))
+
+    def test_missing_image_message_is_in_spanish(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/photos/", {"gallery": self.gallery_ana.pk}, format="multipart"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("obligatoria", str(response.data))
+
+    def test_gallery_create_with_unknown_shoot_is_rejected(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/galleries/", {"shoot": 9999}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_favorite_with_unknown_photo_is_rejected(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            "/api/favorites/", {"photo": 9999}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Favorite.objects.count(), 0)
+
+    def test_download_unknown_photo_returns_404(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post("/api/photos/9999/download/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_anonymous_share_link_is_denied(self):
+        response = self.api.post(
+            f"/api/galleries/{self.gallery_ana.pk}/share-link/"
+        )
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )

@@ -50,7 +50,8 @@
 - Step 17c - photo variants: HD `preview` (1280px) generated together with the thumbnail in one Celery task; downloads accept a version (`light` or `original`) with separate counters (169 passing total)
 - Step 17d - favorites visibility: photographers list client favorites on their own photos (with customer username and thumbnail, `?photo=` filter); deleting stays customer-only (174 passing total)
 - Step 17b - `Review` model: new `reviews` app; customers rate photographers 1-5 with comment (Spanish validator messages, one review per customer+photographer, only for photographers they worked with), role-based lists (written vs received) with `?photographer=` filter, admin registered (189 passing total)
-- Next: step 18 - tests for uploads and permissions
+- Step 18 - uploads and permissions audit: Spanish messages for `role` and photo `image` validation, plus 16 hardening tests (invalid/unknown ids, empty files, anonymous uploads and share links, portfolio spoof, forced booking status, shoot detail for customers) (205 passing total)
+- Next: step 19 - Docker and Docker Compose (Django, PostgreSQL, Redis, Celery)
 
 
 

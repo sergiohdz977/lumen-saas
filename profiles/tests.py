@@ -531,3 +531,73 @@ class PortfolioPhotoEndpointsTests(TestCase):
         self.assertFalse(
             PortfolioPhoto.objects.filter(pk=self.photo_ana.pk).exists()
         )
+
+
+class ProfileOwnershipAuditTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.beto = User.objects.create_user(
+            username="beto",
+            email="beto@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.ana_profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+            is_published=True,
+        )
+        cls.beto_profile = PhotographerProfile.objects.create(
+            user=cls.beto,
+            studio_name="Beto Studio",
+            slug="beto-studio",
+            is_published=True,
+        )
+        cls.package = Package.objects.create(
+            profile=cls.ana_profile, title="Boda completa", price=200
+        )
+
+    def test_portfolio_photo_create_ignores_profile_spoof(self):
+        self.api = APIClient()
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/portfolio-photos/",
+            {
+                "profile": self.beto_profile.pk,
+                "image": "https://example.com/port.jpg",
+                "caption": "spoof",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        photo = PortfolioPhoto.objects.get(pk=response.data["id"])
+        self.assertEqual(photo.profile, self.ana_profile)
+
+    def test_customer_cannot_update_package(self):
+        self.api = APIClient()
+        self.api.force_authenticate(self.maria)
+        response = self.api.patch(
+            f"/api/packages/{self.package.pk}/",
+            {"title": "hackeado"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_customer_cannot_delete_package(self):
+        self.api = APIClient()
+        self.api.force_authenticate(self.maria)
+        response = self.api.delete(f"/api/packages/{self.package.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

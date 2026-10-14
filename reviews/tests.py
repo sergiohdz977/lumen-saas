@@ -178,3 +178,24 @@ class ReviewTests(TestCase):
             response.status_code,
             [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
         )
+
+
+class ReviewAuditTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.luis = User.objects.create_user(
+            username="luis",
+            email="luis@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+
+    def test_review_with_unknown_photographer_is_rejected(self):
+        self.api = APIClient()
+        self.api.force_authenticate(self.luis)
+        response = self.api.post(
+            "/api/reviews/", {"photographer": 9999, "rating": 5},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Review.objects.count(), 0)

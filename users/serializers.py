@@ -3,6 +3,13 @@ from .models import User
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
+    role = serializers.ChoiceField(
+        choices=User.ROLE_CHOICES,
+        default=User.ROLE_CUSTOMER,
+        error_messages={
+            "invalid_choice": "El rol debe ser 'photographer' o 'customer'",
+        },
+    )
 
     class Meta:
         model = User

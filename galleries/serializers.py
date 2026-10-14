@@ -42,7 +42,12 @@ class GallerySerializer(serializers.ModelSerializer):
 
 
 class PhotoSerializer(serializers.ModelSerializer):
-    image = serializers.FileField()
+    image = serializers.FileField(
+        error_messages={
+            "required": "La imagen es obligatoria",
+            "empty": "El archivo está vacío",
+        }
+    )
 
     class Meta:
         model = Photo

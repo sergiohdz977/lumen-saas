@@ -211,3 +211,22 @@ class LoginAndRefreshTests(TestCase):
             format="json",
         )
         self.assertNotIn("password", response.data)
+
+
+class RegisterRoleAuditTests(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+
+    def test_invalid_role_is_rejected_with_spanish_message(self):
+        response = self.api.post(
+            "/api/auth/register/",
+            {
+                "username": "hacker",
+                "email": "hacker@test.com",
+                "password": "secret123",
+                "role": "hacker",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("El rol debe ser", str(response.data))

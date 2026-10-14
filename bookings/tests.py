@@ -612,3 +612,46 @@ class BookingEmailTests(TestCase):
         response = self.api.post(f"/api/bookings/{self.booking.pk}/accept/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 0)
+
+
+class BookingStatusAuditTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.customer = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.ana_profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+            is_published=True,
+        )
+        cls.package = Package.objects.create(
+            profile=cls.ana_profile, title="Boda completa", price=200
+        )
+        cls.pending_booking = BookingRequest.objects.create(
+            customer=cls.customer,
+            package=cls.package,
+            date=datetime(2026, 11, 20, 10, 0, tzinfo=dt_timezone.utc),
+        )
+
+    def test_customer_cannot_force_status_via_patch(self):
+        self.api = APIClient()
+        self.api.force_authenticate(self.customer)
+        response = self.api.patch(
+            f"/api/bookings/{self.pending_booking.pk}/",
+            {"status": "accepted"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.pending_booking.refresh_from_db()
+        self.assertEqual(self.pending_booking.status, "pending")

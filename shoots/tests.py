@@ -175,3 +175,35 @@ class ShootEndpointsTests(TestCase):
         response = self.api.delete(f"/api/shoots/{self.shoot_b.pk}/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(Shoot.objects.filter(pk=self.shoot_b.pk).exists())
+
+
+class ShootPermissionAuditTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.photographer_a = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.customer = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.client_a = Client.objects.create(
+            photographer=cls.photographer_a, user=cls.customer, name="Maria F"
+        )
+        cls.shoot_a = Shoot.objects.create(
+            client=cls.client_a,
+            title="Boda de Maria",
+            shoot_type="boda",
+            date="2026-11-20T10:00:00Z",
+        )
+
+    def test_customer_cannot_retrieve_shoot_detail(self):
+        self.api = APIClient()
+        self.api.force_authenticate(self.customer)
+        response = self.api.get(f"/api/shoots/{self.shoot_a.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
