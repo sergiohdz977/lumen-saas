@@ -49,7 +49,8 @@
 - Step 17a - favorites and downloads: `Favorite` model (unique photo+user, customer-only endpoints, own-gallery validation) and atomic `download_count` increments via `POST /api/photos/{id}/download/` (166 passing total)
 - Step 17c - photo variants: HD `preview` (1280px) generated together with the thumbnail in one Celery task; downloads accept a version (`light` or `original`) with separate counters (169 passing total)
 - Step 17d - favorites visibility: photographers list client favorites on their own photos (with customer username and thumbnail, `?photo=` filter); deleting stays customer-only (174 passing total)
-- Next: Phase 3, step 17b - `Review` model
+- Step 17b - `Review` model: new `reviews` app; customers rate photographers 1-5 with comment (Spanish validator messages, one review per customer+photographer, only for photographers they worked with), role-based lists (written vs received) with `?photographer=` filter, admin registered (189 passing total)
+- Next: step 18 - tests for uploads and permissions
 
 
 

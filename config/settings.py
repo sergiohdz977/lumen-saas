@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'profiles',
     'bookings',
     'galleries',
+    'reviews',
 ]
 
 AUTH_USER_MODEL = "users.User"

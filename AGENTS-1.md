@@ -155,12 +155,12 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 + Phase 2 complete (steps 6-11) + Phase 3 steps 12-16 + favorites,
-  downloads and photo variants (private galleries with Cloudinary uploads, signed
-  share links, background HD preview + thumbnails via Celery, background emails,
-  `Favorite` model, separate light/original download counters)
-  (169 tests passing).
-- Now: Phase 3, step 17b — `Review` model.
+- Done: Phase 1 + Phase 2 (steps 6-11) + Phase 3 complete (steps 12-17): private
+  galleries with Cloudinary uploads and HD previews/thumbnails (Celery), signed share
+  links, background emails, favorites (visible to the photographer), separate
+  light/original download counters, and the `reviews` app (customers rate photographers
+  they worked with) (189 tests passing).
+- Now: step 18 — tests for uploads and permissions.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

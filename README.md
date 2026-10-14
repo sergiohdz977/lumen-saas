@@ -60,6 +60,17 @@ Private: only the photographer of the shoot and that shoot's customer can access
 | POST | `/api/galleries/{id}/share-link/` | Photographer generates a signed share link for a customer (valid 7 days) |
 | GET | `/api/gallery-view/{token}/` | Public: open gallery + photos with the share link, no login required |
 
+## Reviews (current)
+
+Customers rate photographers they have worked with (1-5 + optional comment).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/reviews/` | Customer reviews a photographer: one per customer+photographer, only for photographers with a linked Client record |
+| GET | `/api/reviews/` | Customer: reviews they wrote / Photographer: reviews received. Filter: `?photographer=` |
+| PATCH | `/api/reviews/{id}/` | Customer edits their own review |
+| DELETE | `/api/reviews/{id}/` | Customer deletes their own review |
+
 ## Run locally
 
 ```bash
