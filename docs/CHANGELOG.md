@@ -51,7 +51,8 @@
 - Step 17d - favorites visibility: photographers list client favorites on their own photos (with customer username and thumbnail, `?photo=` filter); deleting stays customer-only (174 passing total)
 - Step 17b - `Review` model: new `reviews` app; customers rate photographers 1-5 with comment (Spanish validator messages, one review per customer+photographer, only for photographers they worked with), role-based lists (written vs received) with `?photographer=` filter, admin registered (189 passing total)
 - Step 18 - uploads and permissions audit: Spanish messages for `role` and photo `image` validation, plus 16 hardening tests (invalid/unknown ids, empty files, anonymous uploads and share links, portfolio spoof, forced booking status, shoot detail for customers) (205 passing total)
-- Next: step 19 - Docker and Docker Compose (Django, PostgreSQL, Redis, Celery)
+- Step 19 - Docker Compose: `Dockerfile` (python:3.13-slim + gunicorn), `docker-compose.yml` with 4 services (web, db=postgres:16-alpine, redis:7-alpine, celery worker), healthchecks, persistent volumes (`postgres_data`, `media_data`); settings gain env-driven `DJANGO_SECRET_KEY`/`DJANGO_DEBUG`/`DJANGO_ALLOWED_HOSTS` and a `USE_POSTGRES=1` switch (local/tests stay on SQLite); `psycopg[binary]==3.3.1` + `gunicorn==26.2.0` in requirements (205 passing total; container run pending Docker Desktop install)
+- Next: verify `docker compose up --build` locally, then step 20 - production deployment
 
 
 
