@@ -13,6 +13,7 @@ from PIL import Image
 
 from .models import Gallery, Photo, SHARE_SALT
 from .storage import store_image
+from notifications.services import notify
 
 logger = logging.getLogger(__name__)
 
@@ -80,19 +81,24 @@ def gallery_ready_email(gallery_id):
         return None
     client = gallery.shoot.client
     to_email = client.user.email if client.user else client.email
-    if not to_email:
-        return None
-    token = signing.dumps(str(gallery.pk), salt=SHARE_SALT)
-    link = f"{settings.SITE_URL}/api/gallery-view/{token}/"
-    send_mail(
-        subject="Tus fotos están listas",
-        message=(
-            f"Hola {client.name},\n\n"
-            f'Tus fotos de "{gallery.shoot.title}" ya están disponibles.\n'
-            f"Enlace privado (válido 7 días): {link}\n\n"
-            "Lumen\n"
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[to_email],
-    )
+    if to_email:
+        token = signing.dumps(str(gallery.pk), salt=SHARE_SALT)
+        link = f"{settings.SITE_URL}/api/gallery-view/{token}/"
+        send_mail(
+            subject="Tus fotos están listas",
+            message=(
+                f"Hola {client.name},\n\n"
+                f'Tus fotos de "{gallery.shoot.title}" ya están disponibles.\n'
+                f"Enlace privado (válido 7 días): {link}\n\n"
+                "Lumen\n"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[to_email],
+        )
+    if client.user:
+        notify(
+            client.user,
+            "Tus fotos estan listas",
+            f'Las fotos de "{gallery.shoot.title}" ya estan disponibles',
+        )
     return to_email

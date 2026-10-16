@@ -155,12 +155,14 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 + Phase 2 (steps 6-11) + Phase 3 complete (steps 12-17) + step 18
-  (uploads/permissions audit): private galleries with Cloudinary uploads and HD
-  previews/thumbnails (Celery), signed share links, background emails, favorites
-  (visible to the photographer), separate light/original download counters, the
-  `reviews` app, and a hardening test pass (205 tests passing).
-- Now: step 19 — Docker and Docker Compose (Django, PostgreSQL, Redis, Celery).
+- Done: Phase 1 + Phase 2 (steps 6-11) + Phase 3 complete (steps 12-18) + step 20
+  (notifications): private galleries with Cloudinary uploads and HD previews
+  (Celery), signed share links, background emails, favorites, download counters,
+  reviews, permissions audit, and real-time notifications over WebSockets
+  (Django Channels). 216 tests passing.
+- Step 19 (Docker) postponed to the end (slow internet): files exist in commit
+  a846525, reverted in aa9defd, restore with `git revert aa9defd` when ready.
+- Now: step 21 — `payments` module (deposits, webhooks, payment states).
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

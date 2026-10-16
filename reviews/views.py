@@ -2,6 +2,7 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from users.models import User
 from users.permissions import IsCustomer
+from notifications.services import notify
 from .models import Review
 from .serializers import ReviewSerializer
 
@@ -29,4 +30,9 @@ class ReviewViewSet(viewsets.ModelViewSet):
         return qs.filter(photographer=user)
 
     def perform_create(self, serializer):
-        serializer.save(customer=self.request.user)
+        review = serializer.save(customer=self.request.user)
+        notify(
+            review.photographer,
+            "Nueva valoracion",
+            f"{review.customer.username} te puso {review.rating}/5",
+        )

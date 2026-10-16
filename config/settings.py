@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'channels',
     'users',
     'clients',
     'shoots',
@@ -53,6 +54,7 @@ INSTALLED_APPS = [
     'bookings',
     'galleries',
     'reviews',
+    'notifications',
 ]
 
 AUTH_USER_MODEL = "users.User"
@@ -85,6 +87,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
 
 
 # Database
@@ -144,12 +147,29 @@ GALLERY_SHARE_MAX_AGE = 7 * 24 * 60 * 60
 # Celery: background tasks (thumbnails). Broker is Redis or Memurai.
 CELERY_BROKER_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 
+# Channels: real-time notifications over WebSockets. Redis is the
+# channel layer (the "postman" that delivers to open connections).
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")],
+        },
+    },
+}
+
 # Tests never touch the network: isolated media folder, no Cloudinary,
-# and Celery runs tasks inline (no broker needed).
+# Celery runs tasks inline (no broker needed) and Channels uses an
+# in-memory layer (no Redis server needed).
 if "test" in sys.argv:
     MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="lumen_test_media_"))
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 
 # Cloudinary photo storage. With no credentials the project falls back
 # to local storage (see galleries/storage.py).

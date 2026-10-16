@@ -8,6 +8,7 @@ from clients.models import Client
 from shoots.models import Shoot
 from users.models import User
 from users.permissions import IsCustomer, IsPhotographer
+from notifications.services import notify
 from .models import BookingRequest
 from .serializers import BookingRequestSerializer
 from .tasks import booking_accepted_email
@@ -91,3 +92,8 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
             booking.status = BookingRequest.Status.ACCEPTED
             booking.save(update_fields=["status"])
         booking_accepted_email.delay(booking.pk)
+        notify(
+            booking.customer,
+            "Reserva aceptada",
+            f'Tu reserva de "{booking.package.title}" fue aceptada',
+        )

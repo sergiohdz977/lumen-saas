@@ -71,6 +71,21 @@ Customers rate photographers they have worked with (1-5 + optional comment).
 | PATCH | `/api/reviews/{id}/` | Customer edits their own review |
 | DELETE | `/api/reviews/{id}/` | Customer deletes their own review |
 
+## Notifications (current)
+
+Real-time (WebSocket) + history (REST). Needs Redis/Memurai running for live
+pushes; the rows are always saved even without it.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/notifications/` | The logged-in user's own notifications (paginated) |
+| POST | `/api/notifications/{id}/read/` | Mark one as read |
+| POST | `/api/notifications/read-all/` | Mark all as read |
+| WS | `/ws/notifications/?token={ACCESS}` | Open line; server pushes new notifications as they happen (session login also works) |
+
+Events that create a notification: booking accepted (to the customer),
+gallery created (to the customer), new review (to the photographer).
+
 ## Run locally
 
 ```bash

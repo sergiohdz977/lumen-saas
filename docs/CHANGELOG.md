@@ -51,7 +51,9 @@
 - Step 17d - favorites visibility: photographers list client favorites on their own photos (with customer username and thumbnail, `?photo=` filter); deleting stays customer-only (174 passing total)
 - Step 17b - `Review` model: new `reviews` app; customers rate photographers 1-5 with comment (Spanish validator messages, one review per customer+photographer, only for photographers they worked with), role-based lists (written vs received) with `?photographer=` filter, admin registered (189 passing total)
 - Step 18 - uploads and permissions audit: Spanish messages for `role` and photo `image` validation, plus 16 hardening tests (invalid/unknown ids, empty files, anonymous uploads and share links, portfolio spoof, forced booking status, shoot detail for customers) (205 passing total)
-- Next: step 19 - Docker and Docker Compose (Django, PostgreSQL, Redis, Celery)
+- Step 19 - Docker Compose: files written (commit a846525) but reverted and postponed to the end of the project due to slow internet; restore with `git revert aa9defd` when ready. Local/tests remain on SQLite, unchanged
+- Step 20 - notifications: new `notifications` app (`Notification` model, REST history with read/read-all, WebSocket at `/ws/notifications/` with JWT-in-query or session auth, `notify()` helper); live pushes on booking accept, gallery delivery and new review; ASGI config with origin validator; channels + channels-redis + daphne added (216 passing total)
+- Next: step 21 - `payments` module (deposits, webhooks, payment states)
 
 
 
