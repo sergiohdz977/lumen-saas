@@ -156,12 +156,11 @@ payments/   payment provider integration
 
 ## Current state
 - Done: Phase 1 + Phase 2 (steps 6-11) + Phase 3 complete (steps 12-17) + step 18
-  (uploads/permissions audit) + step 19 files (Docker Compose: web, PostgreSQL,
-  Redis, Celery worker; settings env-driven with `USE_POSTGRES` switch). 205 tests
-  passing locally (SQLite/eager, unchanged by Docker).
-- Note: `docker compose up --build` not yet verified (Docker Desktop installs
-  on the user's machine next).
-- Now: step 20 — production deployment.
+  (uploads/permissions audit): private galleries with Cloudinary uploads and HD
+  previews/thumbnails (Celery), signed share links, background emails, favorites
+  (visible to the photographer), separate light/original download counters, the
+  `reviews` app, and a hardening test pass (205 tests passing).
+- Now: step 19 — Docker and Docker Compose (Django, PostgreSQL, Redis, Celery).
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

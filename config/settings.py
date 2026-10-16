@@ -28,20 +28,12 @@ load_dotenv(BASE_DIR / ".env")
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-# Docker/production provides DJANGO_SECRET_KEY via environment.
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-totmwzcj3i$pg3q_x)8b*0-xapa=myliu-yj%xh1jz)px6xv-x",
-)
+SECRET_KEY = 'django-insecure-totmwzcj3i$pg3q_x)8b*0-xapa=myliu-yj%xh1jz)px6xv-x'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
+DEBUG = True
 
-ALLOWED_HOSTS = [
-    host
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
-    if host
-]
+ALLOWED_HOSTS = []
 
 
 # Application definition
@@ -104,20 +96,6 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
-# Docker Compose (or any deployment) enables PostgreSQL with USE_POSTGRES=1.
-# Local dev and tests keep using SQLite.
-if os.getenv("USE_POSTGRES") == "1":
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv("POSTGRES_DB", "lumen"),
-            'USER': os.getenv("POSTGRES_USER", "lumen"),
-            'PASSWORD': os.getenv("POSTGRES_PASSWORD", "lumen"),
-            'HOST': os.getenv("POSTGRES_HOST", "db"),
-            'PORT': os.getenv("POSTGRES_PORT", "5432"),
-        }
-    }
 
 
 # Password validation

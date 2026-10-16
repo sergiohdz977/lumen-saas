@@ -87,20 +87,3 @@ venv\Scripts\celery.exe -A config worker --pool=solo -l info
 
 Emails are printed to the worker terminal in development (console backend):
 booking accept and gallery delivery send a message with a private share link.
-
-## Run with Docker
-
-Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
-Starts everything with one command (PostgreSQL, Redis, Django/gunicorn, Celery worker):
-
-```bash
-docker compose up --build
-```
-
-- API on http://127.0.0.1:8000 (migrations run automatically on startup)
-- Data survives restarts (named volumes `postgres_data` and `media_data`)
-- Create an admin: `docker compose exec web python manage.py createsuperuser`
-- Stop with `Ctrl+C` (or `docker compose down`; add `-v` to also delete the data volumes)
-- The worker runs inside Linux, so no `--pool=solo` is needed there
-- `docker-compose.yml` hardcodes `USE_POSTGRES=1` for the containers; local
-  `runserver` and tests keep using SQLite and are unaffected
