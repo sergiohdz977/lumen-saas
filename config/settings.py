@@ -181,6 +181,12 @@ DEPOSIT_PERCENTAGE = 20
 STRIPE_PLATFORM_FEE_PERCENTAGE = int(
     os.getenv("STRIPE_PLATFORM_FEE_PERCENTAGE", "0")
 )
+# Monthly price of the Pro plan (Stripe Products -> Prices, price_xxx).
+STRIPE_PRO_PRICE_ID = os.getenv("STRIPE_PRO_PRICE_ID", "")
+
+# Free tier limits for photographers (Pro plan = unlimited).
+FREE_TIER_GALLERIES = int(os.getenv("FREE_TIER_GALLERIES", "3"))
+FREE_TIER_PHOTOS = int(os.getenv("FREE_TIER_PHOTOS", "100"))
 
 # Cloudinary photo storage. With no credentials the project falls back
 # to local storage (see galleries/storage.py).

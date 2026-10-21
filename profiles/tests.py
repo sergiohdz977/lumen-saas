@@ -94,6 +94,7 @@ class PublicProfileEndpointsTests(TestCase):
             "city",
             "specialties",
             "phone",
+            "plan",
             "created_at",
         }
         self.assertEqual(set(response.data.keys()), expected)

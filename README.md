@@ -98,11 +98,19 @@ customer to the photographer's Stripe account; an optional platform fee
 |--------|----------|-------------|
 | POST | `/api/payments/onboard/` | Photographer: create their Stripe Express account + hosted onboarding form (`{"country": "ES"}`); returns `onboarding_url` |
 | POST | `/api/payments/checkout/` | Customer starts the deposit for an accepted booking (`{"booking": id}`); returns `checkout_url` (Stripe-hosted page). Blocked until the photographer finishes onboarding |
+| POST | `/api/payments/upgrade/` | Photographer: start the Pro subscription (`checkout_url`, mode `subscription`, needs `STRIPE_PRO_PRICE_ID` in `.env`) |
 | GET | `/api/payments/` | Customer: payments made / Photographer: deposits received |
 | GET | `/api/payments/{id}/` | Payment detail |
-| POST | `/api/payments/webhook/` | Stripe calls this (signature verified): `checkout.session.completed` marks the payment `paid` + notifies both sides; `account.updated` flags the photographer as onboarded. Idempotent |
+| POST | `/api/payments/webhook/` | Stripe calls this (signature verified): `checkout.session.completed` marks the payment `paid` + notifies both sides; `account.updated` flags the photographer as onboarded; `customer.subscription.updated/deleted` syncs the `plan`. Idempotent |
 
 Test card: `4242 4242 4242 4242`, any future date, any CVC.
+
+### Plans
+
+Photographers start on **Free**: up to `FREE_TIER_GALLERIES` (3) galleries and
+`FREE_TIER_PHOTOS` (100) photos. **Pro** (monthly Stripe subscription) is
+unlimited; the plan lives on the profile (`plan` field, public in the profile
+response) and is kept in sync by the subscription webhook.
 
 ## Run locally
 

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from shoots.models import Shoot
+from .limits import ensure_gallery_quota, ensure_photo_quota
 from .models import Favorite, Gallery, Photo
 from .storage import store_image
 from .tasks import generate_photo_variants, gallery_ready_email
@@ -33,6 +34,7 @@ class GallerySerializer(serializers.ModelSerializer):
     def validate_shoot(self, value):
         if value.client.photographer != self.context["request"].user:
             raise serializers.ValidationError("That shoot does not belong to you")
+        ensure_gallery_quota(self.context["request"].user)
         return value
 
     def create(self, validated_data):
@@ -91,6 +93,12 @@ class PhotoSerializer(serializers.ModelSerializer):
                 "You cannot add photos to this gallery"
             )
         return value
+
+    def validate(self, data):
+        # Only new photos consume quota; updates never add one.
+        if self.instance is None:
+            ensure_photo_quota(self.context["request"].user)
+        return data
 
 
 class FavoriteSerializer(serializers.ModelSerializer):

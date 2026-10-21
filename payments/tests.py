@@ -299,6 +299,83 @@ class WebhookTests(PaymentTestCase):
         self.payment.refresh_from_db()
         self.assertEqual(self.payment.status, Payment.Status.PENDING)
 
+    def _subscription_event(
+        self,
+        type_="customer.subscription.updated",
+        sub_id="sub_1",
+        customer="cus_test_1",
+        status="active",
+    ):
+        return {
+            "type": type_,
+            "data": {
+                "object": {
+                    "id": sub_id,
+                    "customer": customer,
+                    "status": status,
+                }
+            },
+        }
+
+    def test_subscription_active_marks_profile_pro(self):
+        self.profile.stripe_customer_id = "cus_test_1"
+        self.profile.save(update_fields=["stripe_customer_id"])
+        response = self._post_webhook(self._subscription_event())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.plan, "pro")
+        self.assertEqual(self.profile.subscription_id, "sub_1")
+
+    def test_subscription_canceled_downgrades_to_free(self):
+        self.profile.stripe_customer_id = "cus_test_1"
+        self.profile.plan = "pro"
+        self.profile.subscription_id = "sub_1"
+        self.profile.save(
+            update_fields=[
+                "stripe_customer_id",
+                "plan",
+                "subscription_id",
+            ]
+        )
+        response = self._post_webhook(
+            self._subscription_event(status="canceled")
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.plan, "free")
+
+    def test_subscription_deleted_clears_plan(self):
+        self.profile.stripe_customer_id = "cus_test_1"
+        self.profile.plan = "pro"
+        self.profile.subscription_id = "sub_1"
+        self.profile.save(
+            update_fields=[
+                "stripe_customer_id",
+                "plan",
+                "subscription_id",
+            ]
+        )
+        response = self._post_webhook(
+            self._subscription_event(
+                type_="customer.subscription.deleted"
+            )
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.plan, "free")
+        self.assertEqual(self.profile.subscription_id, "")
+
+    def test_unknown_subscription_is_ignored(self):
+        response = self._post_webhook(
+            self._subscription_event(
+                sub_id="sub_ghost", customer="cus_ghost"
+            )
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.plan, "free")
+        self.assertEqual(self.profile.subscription_id, "")
+
 
 class PaymentVisibilityTests(PaymentTestCase):
     def setUp(self):
@@ -402,3 +479,97 @@ class OnboardTests(PaymentTestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("2-letter", str(response.data))
+
+
+class UpgradeTests(PaymentTestCase):
+    def _patch_upgrade(self, price_id="price_pro_1"):
+        stack = ExitStack()
+        stack.enter_context(override_settings(STRIPE_PRO_PRICE_ID=price_id))
+        stack.enter_context(
+            patch(
+                "payments.providers.create_customer",
+                return_value=SimpleNamespace(id="cus_test_1"),
+            )
+        )
+        stack.enter_context(
+            patch(
+                "payments.providers.create_subscription_session",
+                return_value=SimpleNamespace(
+                    url="https://checkout.stripe.test/sub_1"
+                ),
+            )
+        )
+        return stack
+
+    def test_photographer_gets_subscription_checkout_url(self):
+        self.api.force_authenticate(self.ana)
+        with self._patch_upgrade():
+            response = self.api.post(
+                "/api/payments/upgrade/", {}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("checkout_url", response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.stripe_customer_id, "cus_test_1")
+
+    def test_stripe_customer_is_created_only_once(self):
+        self.api.force_authenticate(self.ana)
+        with override_settings(STRIPE_PRO_PRICE_ID="price_pro_1"), patch(
+            "payments.providers.create_customer",
+            return_value=SimpleNamespace(id="cus_test_1"),
+        ) as mock_customer, patch(
+            "payments.providers.create_subscription_session",
+            return_value=SimpleNamespace(
+                url="https://checkout.stripe.test/sub_1"
+            ),
+        ):
+            self.api.post("/api/payments/upgrade/", {}, format="json")
+            self.api.post("/api/payments/upgrade/", {}, format="json")
+        self.assertEqual(mock_customer.call_count, 1)
+
+    def test_already_on_pro_is_rejected(self):
+        self.profile.plan = "pro"
+        self.profile.save(update_fields=["plan"])
+        self.api.force_authenticate(self.ana)
+        with self._patch_upgrade():
+            response = self.api.post(
+                "/api/payments/upgrade/", {}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("already", str(response.data))
+
+    def test_upgrade_without_price_id_is_rejected(self):
+        self.api.force_authenticate(self.ana)
+        with override_settings(STRIPE_PRO_PRICE_ID=""):
+            response = self.api.post(
+                "/api/payments/upgrade/", {}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("not configured", str(response.data))
+
+    def test_customer_cannot_upgrade(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            "/api/payments/upgrade/", {}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_photographer_without_profile_is_rejected(self):
+        carlos = User.objects.create_user(
+            username="carlos",
+            email="carlos@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        self.api.force_authenticate(carlos)
+        with self._patch_upgrade():
+            response = self.api.post(
+                "/api/payments/upgrade/", {}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("photographer profile", str(response.data))
+
+    def test_profile_shows_plan(self):
+        response = self.api.get(f"/api/profiles/{self.profile.slug}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["plan"], "free")

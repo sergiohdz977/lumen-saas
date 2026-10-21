@@ -81,10 +81,41 @@ def start_checkout(user, booking):
     return payment, session.url
 
 
+def start_upgrade(user):
+    """Start Stripe Checkout for the photographer's Pro subscription."""
+    from profiles.models import PhotographerProfile
+
+    if not hasattr(user, "profile"):
+        raise ValidationError(
+            "Create your photographer profile before upgrading"
+        )
+    if user.profile.plan == PhotographerProfile.PLAN_PRO:
+        raise ValidationError("You are already on the Pro plan")
+    if not settings.STRIPE_PRO_PRICE_ID:
+        raise ValidationError("Subscriptions are not configured yet")
+    profile = user.profile
+    if not profile.stripe_customer_id:
+        customer = providers.create_customer(user.email)
+        profile.stripe_customer_id = customer.id
+        profile.save(update_fields=["stripe_customer_id"])
+    session = providers.create_subscription_session(
+        customer_id=profile.stripe_customer_id,
+        price_id=settings.STRIPE_PRO_PRICE_ID,
+        success_url=f"{settings.SITE_URL}/payments/success/",
+        cancel_url=f"{settings.SITE_URL}/payments/cancel/",
+    )
+    return session.url
+
+
 def handle_webhook_event(event):
     """Apply a Stripe event to our payment. Safe to call twice."""
     if event["type"] == "account.updated":
         return _handle_account_updated(event)
+    if event["type"] in (
+        "customer.subscription.updated",
+        "customer.subscription.deleted",
+    ):
+        return _handle_subscription(event)
     if event["type"] != "checkout.session.completed":
         return None
     session = event["data"]["object"]
@@ -125,3 +156,37 @@ def _handle_account_updated(event):
         stripe_account_id=account["id"]
     ).update(stripe_onboarded=bool(account.get("details_submitted")))
     return account["id"]
+
+
+def _handle_subscription(event):
+    """Keep profile.plan in sync with the Stripe subscription status."""
+    from profiles.models import PhotographerProfile
+
+    obj = event["data"]["object"]
+    profile = None
+    if obj.get("customer"):
+        profile = PhotographerProfile.objects.filter(
+            stripe_customer_id=obj["customer"]
+        ).first()
+    if profile is None and obj.get("id"):
+        profile = PhotographerProfile.objects.filter(
+            subscription_id=obj["id"]
+        ).first()
+    if profile is None:
+        # Event for an account we do not know; still answer 200.
+        return None
+    if event["type"] == "customer.subscription.deleted":
+        profile.plan = PhotographerProfile.PLAN_FREE
+        profile.subscription_id = ""
+    else:
+        active = obj.get("status") in ("active", "trialing")
+        profile.plan = (
+            PhotographerProfile.PLAN_PRO
+            if active
+            else PhotographerProfile.PLAN_FREE
+        )
+        profile.subscription_id = obj.get(
+            "id", profile.subscription_id
+        )
+    profile.save(update_fields=["plan", "subscription_id"])
+    return profile.pk

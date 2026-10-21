@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from clients.models import Client
+from profiles.models import PhotographerProfile
 from shoots.models import Shoot
 from users.models import User
 from .models import Favorite, Gallery, Photo
@@ -1067,3 +1068,101 @@ class UploadPermissionAuditTests(TestCase):
             response.status_code,
             [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
         )
+
+
+class PlanLimitTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+        )
+        cls.client_maria = Client.objects.create(
+            photographer=cls.ana, user=cls.maria, name="Maria F"
+        )
+        cls.shoot_1 = Shoot.objects.create(
+            client=cls.client_maria,
+            title="Boda de Maria",
+            shoot_type="boda",
+            date="2026-11-20T10:00:00Z",
+        )
+        cls.shoot_2 = Shoot.objects.create(
+            client=cls.client_maria,
+            title="Preboda de Maria",
+            shoot_type="preboda",
+            date="2026-11-19T10:00:00Z",
+        )
+        cls.gallery_1 = Gallery.objects.create(shoot=cls.shoot_1)
+        cls.photo_1 = Photo.objects.create(
+            gallery=cls.gallery_1,
+            image="https://example.com/foto1.jpg",
+            caption="Primera",
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    @override_settings(FREE_TIER_GALLERIES=1)
+    def test_free_plan_is_limited_to_the_gallery_quota(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/galleries/", {"shoot": self.shoot_2.pk}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Free plan", str(response.data))
+        self.assertFalse(
+            Gallery.objects.filter(shoot=self.shoot_2).exists()
+        )
+
+    @override_settings(FREE_TIER_GALLERIES=1)
+    def test_pro_plan_has_unlimited_galleries(self):
+        self.profile.plan = "pro"
+        self.profile.save(update_fields=["plan"])
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/galleries/", {"shoot": self.shoot_2.pk}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    @override_settings(FREE_TIER_PHOTOS=1)
+    def test_free_plan_is_limited_to_the_photo_quota(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/photos/",
+            {
+                "gallery": self.gallery_1.pk,
+                "image": fake_image("nueva.jpg"),
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Free plan", str(response.data))
+        self.assertEqual(Photo.objects.count(), 1)
+
+    @override_settings(FREE_TIER_PHOTOS=1)
+    def test_pro_plan_has_unlimited_photos(self):
+        self.profile.plan = "pro"
+        self.profile.save(update_fields=["plan"])
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/photos/",
+            {
+                "gallery": self.gallery_1.pk,
+                "image": fake_image("nueva.jpg"),
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)

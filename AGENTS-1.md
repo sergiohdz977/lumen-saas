@@ -66,8 +66,9 @@ must never be selectable by the user. Use a custom permission `IsPhotographer`
 
 ## Monetization
 - Customers use the app for free.
-- Photographers pay: monthly subscription (free tier with limits, paid tier with more storage)
-  and possibly a commission per paid booking.
+- Photographers pay: monthly subscription (free tier with limits: 3 galleries /
+  100 photos, `FREE_TIER_*` settings; paid tier Pro = unlimited) and possibly a
+  commission per paid booking.
 - The deposit paid by the customer goes to the photographer, not to the app.
 - Payments use Stripe, isolated in a `payments` module so the provider can be swapped.
 
@@ -157,11 +158,12 @@ payments/    payment provider integration
 ## Current state
 - Done: Phase 1 + Phase 2 + Phase 3 complete (steps 12-18) + step 20 (notifications
   over WebSockets) + step 21 (Stripe deposits) + step 21b (Stripe Connect:
-  photographer onboarding + destination charges, no manual payouts) + product
-  language switched to English everywhere. 239 tests passing.
+  photographer onboarding + destination charges) + step 22 (Pro subscriptions
+  with Free tier limits) + product language switched to English everywhere.
+  254 tests passing.
 - Step 19 (Docker) postponed to the end (slow internet): files exist in commit
   a846525, reverted in aa9defd, restore with `git revert aa9defd` when ready.
-- Now: step 22 — subscription plans for photographers.
+- Now: step 23 — switch to PostgreSQL, production settings, environment variables.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

@@ -16,10 +16,11 @@ class PhotographerProfileSerializer(serializers.ModelSerializer):
             "city",
             "specialties",
             "phone",
+            "plan",
             "created_at",
         ]
         read_only_fields = fields
-    
+
 
 class PackageSerializer(serializers.ModelSerializer):
     profile_slug = serializers.CharField(source="profile.slug", read_only=True)

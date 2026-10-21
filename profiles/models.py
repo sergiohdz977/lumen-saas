@@ -5,6 +5,13 @@ from django.utils.text import slugify
 
 
 class PhotographerProfile(models.Model):
+    PLAN_FREE = "free"
+    PLAN_PRO = "pro"
+    PLAN_CHOICES = [
+        (PLAN_FREE, "Free"),
+        (PLAN_PRO, "Pro"),
+    ]
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -17,8 +24,17 @@ class PhotographerProfile(models.Model):
     specialties = models.CharField(max_length=200, blank=True)
     phone = models.CharField(max_length=30, blank=True)
     is_published = models.BooleanField(default=False)
+    # Stripe Connect: where the deposits of this photographer go.
     stripe_account_id = models.CharField(max_length=255, blank=True, default="")
     stripe_onboarded = models.BooleanField(default=False)
+    # Stripe subscription: the photographer's own Pro plan.
+    plan = models.CharField(
+        max_length=10, choices=PLAN_CHOICES, default=PLAN_FREE
+    )
+    stripe_customer_id = models.CharField(
+        max_length=255, blank=True, default=""
+    )
+    subscription_id = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -22,7 +22,7 @@ class PaymentViewSet(
     def get_permissions(self):
         if self.action == "checkout":
             return [IsAuthenticated(), IsCustomer()]
-        if self.action == "onboard":
+        if self.action in ("onboard", "upgrade"):
             return [IsAuthenticated(), IsPhotographer()]
         return [IsAuthenticated()]
 
@@ -43,6 +43,11 @@ class PaymentViewSet(
             request.user, request.data.get("country")
         )
         return Response({"onboarding_url": url}, status=201)
+
+    @action(detail=False, methods=["post"])
+    def upgrade(self, request):
+        url = services.start_upgrade(request.user)
+        return Response({"checkout_url": url}, status=201)
 
     @action(detail=False, methods=["post"])
     def checkout(self, request):
