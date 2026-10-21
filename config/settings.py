@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'galleries',
     'reviews',
     'notifications',
+    'payments',
 ]
 
 AUTH_USER_MODEL = "users.User"
@@ -170,6 +171,12 @@ if "test" in sys.argv:
             "BACKEND": "channels.layers.InMemoryChannelLayer",
         },
     }
+
+# Stripe payments (test keys live in .env; see .env.example).
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+# Deposit due to confirm a booking, as a percentage of the package price.
+DEPOSIT_PERCENTAGE = 20
 
 # Cloudinary photo storage. With no credentials the project falls back
 # to local storage (see galleries/storage.py).

@@ -86,6 +86,20 @@ pushes; the rows are always saved even without it.
 Events that create a notification: booking accepted (to the customer),
 gallery created (to the customer), new review (to the photographer).
 
+## Payments (current)
+
+Stripe deposits for accepted bookings (20% of the package price, test keys
+first — put `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in `.env`).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/payments/checkout/` | Customer starts the deposit for an accepted booking (`{"booking": id}`); returns `checkout_url` (Stripe-hosted page) |
+| GET | `/api/payments/` | Customer: payments made / Photographer: deposits received |
+| GET | `/api/payments/{id}/` | Payment detail |
+| POST | `/api/payments/webhook/` | Stripe calls this (signature verified); marks the payment `paid` and notifies both sides. Idempotent |
+
+Test card: `4242 4242 4242 4242`, any future date, any CVC.
+
 ## Run locally
 
 ```bash

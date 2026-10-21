@@ -24,6 +24,7 @@ python-dotenv==1.1.1
 redis==8.1.0
 six==1.17.0
 sqlparse==0.6.0
+stripe==16.0.0
 tzdata==2026.4
 tzlocal==5.4.4
 vine==5.1.0

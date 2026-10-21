@@ -7,7 +7,7 @@ photographer profiles and catalogs and request a booking.
 
 Two goals:
 1. Portfolio project for a junior backend developer (clean, tested, explainable code).
-2. Possible real product for the Cuban market, so it must stay adaptable to that context.
+2. Real product for an international market.
 
 We build the WHOLE project, phase by phase, following the roadmap below. Deployment is done at the end.
 
@@ -27,13 +27,13 @@ We build the WHOLE project, phase by phase, following the roadmap below. Deploym
 - Code, comments, commits and docs are in English. Talk to me in Spanish.
 
 ## Language rules (for the product)
-- Everything internal stays in English: model names, field names, API keys and routes
-  (`photographer`, `created_at`, `/api/clients/`), stored values (`booked`, `editing`, `delivered`).
-- Everything the end user sees is in Spanish: error messages, emails, display labels.
-- Set `LANGUAGE_CODE = "es"`.
-- Choices keep an English stored value and a Spanish label, for example
-  `PHOTOGRAPHER = "photographer", "Fotógrafo"`.
-- Use `verbose_name` in Spanish only where useful (admin).
+- Everything is in English: code, comments, commits, docs, API messages, emails,
+  choice labels, and validation errors (`photographer`, `created_at`,
+  `/api/clients/`, "You already have a shoot booked that day").
+- The stored value and the display label of a choice are both English, for example
+  `PHOTOGRAPHER = "photographer", "Photographer"`.
+- `LANGUAGE_CODE = "en-us"`.
+- Talk to me in Spanish; the product talks English.
 
 ## Actors and roles
 - **Photographer**: creates a profile, catalog and packages, handles booking requests and shoots.
@@ -69,14 +69,12 @@ must never be selectable by the user. Use a custom permission `IsPhotographer`
 - Photographers pay: monthly subscription (free tier with limits, paid tier with more storage)
   and possibly a commission per paid booking.
 - The deposit paid by the customer goes to the photographer, not to the app.
-- Payments live in an isolated `payments` module so the provider can be swapped. Stripe does not
-  operate in Cuba; for that market a local provider (for example EnZona, which has a payments API)
-  or manual payments would be needed. Provider is not decided yet.
+- Payments use Stripe, isolated in a `payments` module so the provider can be swapped.
 
-## Market constraints (Cuba)
-- Internet is slow, expensive and limited: keep photos light (thumbnails, compression).
-- Some cloud services may restrict access from Cuba. Verify before choosing providers.
-- Do not build Cuba-specific logic yet. Keep the design generic and adaptable.
+## Market
+- International, English-first product.
+- Photos stay light (thumbnails, compression) so the app works on slow connections.
+- Do not build country-specific logic. Keep the design generic.
 
 ## Tech stack
 - Python, Django, Django REST Framework
@@ -86,20 +84,22 @@ must never be selectable by the user. Use a custom permission `IsPhotographer`
 - Cloudinary for photo storage (SDK uploads + URLs); local `media/` fallback, switchable
   to any S3-compatible provider
 - Celery + Redis for thumbnails and emails
-- Django Channels (WebSockets), Docker, a payments provider
+- Django Channels (WebSockets), Docker, Stripe
 
 The ORM is Django's own. Do not suggest Prisma or other ORMs. Introduce each tool only at its step.
 
 ## Project structure
 ```
-config/     settings and main urls
-users/      custom User with role, register, login, permissions
-clients/    photographer's clients
-shoots/     photo sessions with status
-profiles/   photographer profile, packages, portfolio
-bookings/   booking requests
-galleries/  galleries, photos, reviews
-payments/   payment provider integration
+config/      settings and main urls
+users/       custom User with role, register, login, permissions
+clients/     photographer's clients
+shoots/      photo sessions with status
+profiles/    photographer profile, packages, portfolio
+bookings/    booking requests
+galleries/   galleries and photos
+reviews/     customer reviews of photographers
+notifications/ notification history and WebSocket push
+payments/    payment provider integration
 ```
 
 ## Models
@@ -145,7 +145,7 @@ payments/   payment provider integration
 ### Phase 4: advanced
 19. Docker and Docker Compose (Django, PostgreSQL, Redis, Celery)
 20. WebSockets with Channels (upload progress, notifications)
-21. `payments` module: deposits, webhooks, payment states
+21. `payments` module with Stripe: deposits, webhooks, payment states
 22. Subscription plans for photographers
 
 ### Final
@@ -155,14 +155,13 @@ payments/   payment provider integration
 26. Clean code and verify the project runs from scratch
 
 ## Current state
-- Done: Phase 1 + Phase 2 (steps 6-11) + Phase 3 complete (steps 12-18) + step 20
-  (notifications): private galleries with Cloudinary uploads and HD previews
-  (Celery), signed share links, background emails, favorites, download counters,
-  reviews, permissions audit, and real-time notifications over WebSockets
-  (Django Channels). 216 tests passing.
+- Done: Phase 1 + Phase 2 + Phase 3 complete (steps 12-18) + step 20 (notifications
+  over WebSockets) + step 21 (Stripe deposit payments via Checkout + signed
+  idempotent webhook) + product language switched to English everywhere. 230 tests
+  passing.
 - Step 19 (Docker) postponed to the end (slow internet): files exist in commit
   a846525, reverted in aa9defd, restore with `git revert aa9defd` when ready.
-- Now: step 21 — `payments` module (deposits, webhooks, payment states).
+- Now: step 22 — subscription plans for photographers.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

@@ -53,7 +53,9 @@
 - Step 18 - uploads and permissions audit: Spanish messages for `role` and photo `image` validation, plus 16 hardening tests (invalid/unknown ids, empty files, anonymous uploads and share links, portfolio spoof, forced booking status, shoot detail for customers) (205 passing total)
 - Step 19 - Docker Compose: files written (commit a846525) but reverted and postponed to the end of the project due to slow internet; restore with `git revert aa9defd` when ready. Local/tests remain on SQLite, unchanged
 - Step 20 - notifications: new `notifications` app (`Notification` model, REST history with read/read-all, WebSocket at `/ws/notifications/` with JWT-in-query or session auth, `notify()` helper); live pushes on booking accept, gallery delivery and new review; ASGI config with origin validator; channels + channels-redis + daphne added (216 passing total)
-- Next: step 21 - `payments` module (deposits, webhooks, payment states)
+- Language switch - product is now English-first (pivot away from the Cuba market): all user-facing strings (validation errors, emails, notification texts, choice labels) converted to English, tests updated, AGENTS-1 language rules rewritten; Stripe chosen as the payment provider (216 passing total)
+- Step 21 - payments: new `payments` app (Stripe Checkout deposits, 20% of the package price, `DEPOSIT_PERCENTAGE` setting); `Payment` model (pending/paid, amount in cents, unique session id), thin `providers.py` swap layer, signed webhook with idempotency, notifications on payment, role-based list (customer vs photographer); stripe==16.0.0 added (230 passing total)
+- Next: step 22 - subscription plans for photographers
 
 
 
