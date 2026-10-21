@@ -33,6 +33,6 @@ class ReviewViewSet(viewsets.ModelViewSet):
         review = serializer.save(customer=self.request.user)
         notify(
             review.photographer,
-            "Nueva valoracion",
-            f"{review.customer.username} te puso {review.rating}/5",
+            "New review",
+            f"{review.customer.username} gave you {review.rating}/5",
         )

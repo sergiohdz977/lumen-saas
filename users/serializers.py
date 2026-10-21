@@ -7,7 +7,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         choices=User.ROLE_CHOICES,
         default=User.ROLE_CUSTOMER,
         error_messages={
-            "invalid_choice": "El rol debe ser 'photographer' o 'customer'",
+            "invalid_choice": "Role must be 'photographer' or 'customer'",
         },
     )
 
@@ -17,7 +17,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def validate_email(self, value):
         if User.objects.filter(email__iexact=value).exists():
-            raise serializers.ValidationError("Este correo ya existe")
+            raise serializers.ValidationError("This email is already registered")
         return value
 
     def create(self, validated_data):

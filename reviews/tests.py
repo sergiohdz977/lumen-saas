@@ -70,7 +70,7 @@ class ReviewTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("mínima", str(response.data))
+        self.assertIn("at least", str(response.data))
 
     def test_rating_above_maximum_is_rejected(self):
         self.api.force_authenticate(self.luis)
@@ -80,7 +80,7 @@ class ReviewTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("máxima", str(response.data))
+        self.assertIn("at most", str(response.data))
 
     def test_missing_rating_is_rejected(self):
         self.api.force_authenticate(self.luis)
@@ -89,7 +89,7 @@ class ReviewTests(TestCase):
             "/api/reviews/", {"photographer": self.beto.pk}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("obligatoria", str(response.data))
+        self.assertIn("required", str(response.data))
 
     def test_cannot_review_photographer_without_working_together(self):
         self.api.force_authenticate(self.luis)
@@ -98,7 +98,7 @@ class ReviewTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("has trabajado", str(response.data))
+        self.assertIn("have worked", str(response.data))
 
     def test_cannot_review_a_customer(self):
         self.api.force_authenticate(self.luis)
@@ -107,7 +107,7 @@ class ReviewTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("valorar fotógrafos", str(response.data))
+        self.assertIn("only review photographers", str(response.data))
 
     def test_photographer_cannot_create_review(self):
         self.api.force_authenticate(self.ana)
@@ -124,7 +124,7 @@ class ReviewTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Ya has valorado", str(response.data))
+        self.assertIn("already reviewed", str(response.data))
 
     def test_customer_edits_own_review(self):
         self.api.force_authenticate(self.maria)

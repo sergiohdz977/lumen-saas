@@ -12,13 +12,13 @@ class ShootSerializer(serializers.ModelSerializer):
         request = self.context["request"]
         if value.photographer_id != request.user.id:
             raise serializers.ValidationError(
-                "El cliente no pertenece a tu cuenta"
+                "That client does not belong to your account"
             )
         return value
 
     def validate_status(self, value):
         if self.instance is None:
-            return value 
+            return value
         if value == self.instance.status:
             return value
         allowed_transitions = {
@@ -28,6 +28,6 @@ class ShootSerializer(serializers.ModelSerializer):
         }
         if value not in allowed_transitions[self.instance.status]:
             raise serializers.ValidationError(
-                "Transición de estado no válida"
+                "Invalid status transition"
             )
         return value

@@ -38,6 +38,6 @@ class BookingRequestSerializer(serializers.ModelSerializer):
     def validate_package(self, value):
         if not value.profile.is_published:
             raise serializers.ValidationError(
-                "Este paquete no está disponible"
+                "This package is not available"
             )
         return value

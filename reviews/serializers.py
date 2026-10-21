@@ -8,9 +8,9 @@ class ReviewSerializer(serializers.ModelSerializer):
         min_value=1,
         max_value=5,
         error_messages={
-            "required": "La nota es obligatoria",
-            "min_value": "La nota mínima es 1",
-            "max_value": "La nota máxima es 5",
+            "required": "A rating is required",
+            "min_value": "Rating must be at least 1",
+            "max_value": "Rating must be at most 5",
         },
     )
     photographer_username = serializers.CharField(
@@ -34,17 +34,19 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     def validate_photographer(self, value):
         if value.role != value.ROLE_PHOTOGRAPHER:
-            raise serializers.ValidationError("Solo se pueden valorar fotógrafos")
+            raise serializers.ValidationError("You can only review photographers")
         if value == self.context["request"].user:
-            raise serializers.ValidationError("No puedes valorarte a ti mismo")
+            raise serializers.ValidationError("You cannot review yourself")
         if not Client.objects.filter(
             photographer=value, user=self.context["request"].user
         ).exists():
             raise serializers.ValidationError(
-                "Solo puedes valorar fotógrafos con los que has trabajado"
+                "You can only review photographers you have worked with"
             )
         if Review.objects.filter(
             photographer=value, customer=self.context["request"].user
         ).exclude(pk=self.instance.pk if self.instance else None):
-            raise serializers.ValidationError("Ya has valorado a este fotógrafo")
+            raise serializers.ValidationError(
+                "You have already reviewed this photographer"
+            )
         return value

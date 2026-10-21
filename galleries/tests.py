@@ -120,7 +120,7 @@ class GalleryAccessTests(TestCase):
             "/api/galleries/", {"shoot": second_shoot_ana.pk}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("no es tuya", str(response.data))
+        self.assertIn("does not belong", str(response.data))
 
     def test_shoot_can_have_only_one_gallery(self):
         self.api.force_authenticate(self.ana)
@@ -128,7 +128,7 @@ class GalleryAccessTests(TestCase):
             "/api/galleries/", {"shoot": self.shoot_ana.pk}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("ya tiene", str(response.data))
+        self.assertIn("already has a gallery", str(response.data))
 
     def test_photographer_lists_only_own_galleries(self):
         self.api.force_authenticate(self.ana)
@@ -406,7 +406,7 @@ class ShareLinkTests(TestCase):
     def test_tampered_token_is_rejected(self):
         response = self.api.get("/api/gallery-view/abc123/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertIn("no es válido", str(response.data))
+        self.assertIn("not valid", str(response.data))
 
     @override_settings(GALLERY_SHARE_MAX_AGE=-1)
     def test_expired_link_is_rejected(self):
@@ -414,7 +414,7 @@ class ShareLinkTests(TestCase):
         anonymous = APIClient()
         response = anonymous.get(data["url"])
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertIn("expirado", str(response.data))
+        self.assertIn("expired", str(response.data))
 
     def test_deleted_gallery_link_stops_working(self):
         data = self._share()
@@ -601,7 +601,7 @@ class GalleryDeliveryEmailTests(TestCase):
         response = self._create_gallery(self.shoot_ana)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].subject, "Tus fotos están listas")
+        self.assertEqual(mail.outbox[0].subject, "Your photos are ready")
         self.assertEqual(mail.outbox[0].to, ["maria@test.com"])
         self.assertIn("/api/gallery-view/", mail.outbox[0].body)
 
@@ -704,7 +704,7 @@ class FavoritesTests(TestCase):
             "/api/favorites/", {"photo": self.photo_ana.pk}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("ya está", str(response.data))
+        self.assertIn("already", str(response.data))
 
     def test_cannot_favorite_another_customers_photo(self):
         self.api.force_authenticate(self.luis)
@@ -712,7 +712,7 @@ class FavoritesTests(TestCase):
             "/api/favorites/", {"photo": self.photo_ana.pk}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("No puedes", str(response.data))
+        self.assertIn("cannot", str(response.data))
 
     def test_customer_lists_only_own_favorites(self):
         self.api.force_authenticate(self.maria)
@@ -929,7 +929,7 @@ class PhotoDownloadTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Versión no válida", str(response.data))
+        self.assertIn("Invalid version", str(response.data))
 
     def test_downloads_accumulate(self):
         self.api.force_authenticate(self.maria)
@@ -1029,7 +1029,7 @@ class UploadPermissionAuditTests(TestCase):
             format="multipart",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("vacío", str(response.data))
+        self.assertIn("empty", str(response.data))
 
     def test_missing_image_message_is_in_spanish(self):
         self.api.force_authenticate(self.ana)
@@ -1037,7 +1037,7 @@ class UploadPermissionAuditTests(TestCase):
             "/api/photos/", {"gallery": self.gallery_ana.pk}, format="multipart"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("obligatoria", str(response.data))
+        self.assertIn("required", str(response.data))
 
     def test_gallery_create_with_unknown_shoot_is_rejected(self):
         self.api.force_authenticate(self.ana)

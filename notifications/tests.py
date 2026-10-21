@@ -32,8 +32,8 @@ class NotificationRestTests(TestCase):
         )
         cls.note_maria = Notification.objects.create(
             user=cls.maria,
-            title="Reserva aceptada",
-            message="Tu sesion fue aceptada",
+            title="Booking accepted",
+            message="Your session was accepted",
         )
         Notification.objects.create(
             user=cls.luis, title="De luis", message="otra notificacion"
@@ -47,7 +47,7 @@ class NotificationRestTests(TestCase):
         response = self.api.get("/api/notifications/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         titles = [item["title"] for item in response.data["results"]]
-        self.assertEqual(titles, ["Reserva aceptada"])
+        self.assertEqual(titles, ["Booking accepted"])
 
     def test_anonymous_list_is_denied(self):
         response = self.api.get("/api/notifications/")
@@ -131,7 +131,7 @@ class NotifyIntegrationTests(TestCase):
         response = self.api.post(f"/api/bookings/{self.booking.pk}/accept/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         note = Notification.objects.get(user=self.maria)
-        self.assertEqual(note.title, "Reserva aceptada")
+        self.assertEqual(note.title, "Booking accepted")
 
     def test_new_review_notifies_the_photographer(self):
         self.api.force_authenticate(self.maria)
@@ -146,7 +146,7 @@ class NotifyIntegrationTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         note = Notification.objects.get(user=self.ana)
-        self.assertEqual(note.title, "Nueva valoracion")
+        self.assertEqual(note.title, "New review")
 
     def test_gallery_creation_notifies_the_customer(self):
         self.api.force_authenticate(self.ana)
@@ -155,7 +155,7 @@ class NotifyIntegrationTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         note = Notification.objects.get(user=self.maria)
-        self.assertEqual(note.title, "Tus fotos estan listas")
+        self.assertEqual(note.title, "Your photos are ready")
 
 
 class NotificationWebSocketTests(TransactionTestCase):
@@ -173,11 +173,11 @@ class NotificationWebSocketTests(TransactionTestCase):
             connected, _ = await communicator.connect()
             self.assertTrue(connected)
             await sync_to_async(notify)(
-                user, "Reserva aceptada", "Todo listo"
+                user, "Booking accepted", "All set"
             )
             payload = await communicator.receive_json_from()
-            self.assertEqual(payload["title"], "Reserva aceptada")
-            self.assertEqual(payload["message"], "Todo listo")
+            self.assertEqual(payload["title"], "Booking accepted")
+            self.assertEqual(payload["message"], "All set")
             await communicator.disconnect()
 
         async_to_sync(scenario)()

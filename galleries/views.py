@@ -64,9 +64,9 @@ def gallery_view(request, token):
             max_age=settings.GALLERY_SHARE_MAX_AGE,
         )
     except signing.SignatureExpired:
-        raise NotFound("El enlace ha expirado")
+        raise NotFound("The link has expired")
     except signing.BadSignature:
-        raise NotFound("El enlace no es válido")
+        raise NotFound("The link is not valid")
 
     gallery = get_object_or_404(
         Gallery.objects.select_related("shoot__client", "shoot__client__user"),
@@ -114,7 +114,7 @@ class PhotoViewSet(viewsets.ModelViewSet):
         elif version == "original":
             counter = "download_count"
         else:
-            raise ValidationError("Versión no válida: usa 'light' u 'original'")
+            raise ValidationError("Invalid version: use 'light' or 'original'")
         Photo.objects.filter(pk=photo.pk).update(**{counter: F(counter) + 1})
         photo.refresh_from_db(
             fields=["download_count", "light_download_count"]

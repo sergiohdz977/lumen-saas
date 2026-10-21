@@ -92,7 +92,7 @@ class BookingEndpointsTests(TestCase):
         self.api.force_authenticate(self.ana)
         response = self.api.post("/api/bookings/", self.valid_payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("Solo los clientes", str(response.data))
+        self.assertIn("Only customers", str(response.data))
 
     def test_customer_creates_pending_booking(self):
         self.api.force_authenticate(self.customer)
@@ -116,7 +116,7 @@ class BookingEndpointsTests(TestCase):
         payload = {**self.valid_payload, "package": self.hidden_package.pk}
         response = self.api.post("/api/bookings/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("no está disponible", str(response.data))
+        self.assertIn("not available", str(response.data))
 
     def test_date_is_required(self):
         self.api.force_authenticate(self.customer)
@@ -189,7 +189,7 @@ class BookingEndpointsTests(TestCase):
             f"/api/bookings/{self.pending_booking.pk}/accept/", format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("pendientes", str(response.data))
+        self.assertIn("pending", str(response.data))
 
     def test_photographer_cannot_accept_others_booking(self):
         package_beto = Package.objects.create(
@@ -212,7 +212,7 @@ class BookingEndpointsTests(TestCase):
             f"/api/bookings/{self.pending_booking.pk}/accept/", format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("Solo los fotógrafos", str(response.data))
+        self.assertIn("Only photographers", str(response.data))
 
 
 class AcceptSideEffectsTests(TestCase):
@@ -313,7 +313,7 @@ class AcceptSideEffectsTests(TestCase):
             f"/api/bookings/{self.booking.pk}/accept/", format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("esa fecha", str(response.data))
+        self.assertIn("that day", str(response.data))
         self.booking.refresh_from_db()
         self.assertEqual(self.booking.status, BookingRequest.Status.PENDING)
         self.assertEqual(Shoot.objects.count(), 1)
@@ -587,7 +587,7 @@ class BookingEmailTests(TestCase):
         response = self.api.post(f"/api/bookings/{self.booking.pk}/accept/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].subject, "Tu reserva fue aceptada")
+        self.assertEqual(mail.outbox[0].subject, "Your booking was accepted")
         self.assertEqual(mail.outbox[0].to, ["maria@test.com"])
         self.assertIn("Boda completa", mail.outbox[0].body)
         self.assertIn("20/11/2026", mail.outbox[0].body)

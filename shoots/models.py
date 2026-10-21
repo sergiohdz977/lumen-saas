@@ -2,9 +2,9 @@ from django.db import models
 
 class Shoot(models.Model):
     class Status(models.TextChoices):
-        BOOKED = "booked", "Reservada"
-        EDITING = "editing", "En edición"
-        DELIVERED = "delivered", "Entregada"
+        BOOKED = "booked", "Booked"
+        EDITING = "editing", "In editing"
+        DELIVERED = "delivered", "Delivered"
 
     client = models.ForeignKey(
         "clients.Client", on_delete=models.CASCADE, related_name="shoots"

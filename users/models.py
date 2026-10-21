@@ -5,14 +5,14 @@ class User(AbstractUser):
     ROLE_PHOTOGRAPHER = "photographer"
     ROLE_CUSTOMER = "customer"
     ROLE_CHOICES = [
-        (ROLE_PHOTOGRAPHER, "Fotógrafo"),
-        (ROLE_CUSTOMER, "Cliente"),
+        (ROLE_PHOTOGRAPHER, "Photographer"),
+        (ROLE_CUSTOMER, "Customer"),
     ]
 
     role = models.CharField(
         max_length=12,
         choices=ROLE_CHOICES,
         default=ROLE_CUSTOMER,
-        verbose_name="Rol",
+        verbose_name="role",
     )
 

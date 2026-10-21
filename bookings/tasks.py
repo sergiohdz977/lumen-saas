@@ -17,12 +17,12 @@ def booking_accepted_email(booking_id):
     if booking is None or not booking.customer.email:
         return None
     send_mail(
-        subject="Tu reserva fue aceptada",
+        subject="Your booking was accepted",
         message=(
-            f"Hola {booking.customer.username},\n\n"
-            f'Tu sesión "{booking.package.title}" fue aceptada para el '
+            f"Hello {booking.customer.username},\n\n"
+            f'Your shoot "{booking.package.title}" was accepted for '
             f"{booking.date.strftime('%d/%m/%Y %H:%M')}.\n\n"
-            "Puedes ver el estado desde Lumen.\n"
+            "You can check its status in Lumen.\n"
         ),
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[booking.customer.email],

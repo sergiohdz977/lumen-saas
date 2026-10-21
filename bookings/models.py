@@ -4,9 +4,9 @@ from django.db import models
 
 class BookingRequest(models.Model):
     class Status(models.TextChoices):
-        PENDING = "pending", "Pendiente"
-        ACCEPTED = "accepted", "Aceptada"
-        REJECTED = "rejected", "Rechazada"
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
 
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,

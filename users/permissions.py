@@ -3,7 +3,7 @@ from .models import User
 
 
 class IsPhotographer(BasePermission):
-    message = "Solo los fotógrafos pueden realizar esta acción"
+    message = "Only photographers can perform this action"
 
     def has_permission(self, request, view):
         user = request.user
@@ -15,7 +15,7 @@ class IsPhotographer(BasePermission):
 
 
 class IsCustomer(BasePermission):
-    message = "Solo los clientes pueden realizar esta acción"
+    message = "Only customers can perform this action"
 
     def has_permission(self, request, view):
         user = request.user

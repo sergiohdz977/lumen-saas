@@ -53,7 +53,7 @@ class IsPhotographerTests(TestCase):
     def test_message_is_in_spanish(self):
         self.assertEqual(
             IsPhotographer.message,
-            "Solo los fotógrafos pueden realizar esta acción",
+            "Only photographers can perform this action",
         )
 
     def test_view_rejects_customer(self):
@@ -63,7 +63,7 @@ class IsPhotographerTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(
             response.data["detail"],
-            "Solo los fotógrafos pueden realizar esta acción",
+            "Only photographers can perform this action",
         )
 
     def test_view_allows_photographer(self):
@@ -116,7 +116,7 @@ class RegisterEndpointTests(TestCase):
         }
         response = self.api.post("/api/auth/register/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Este correo ya existe", str(response.data))
+        self.assertIn("This email is already registered", str(response.data))
 
     def test_register_short_password_rejected(self):
         payload = {
@@ -229,4 +229,4 @@ class RegisterRoleAuditTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("El rol debe ser", str(response.data))
+        self.assertIn("Role must be", str(response.data))

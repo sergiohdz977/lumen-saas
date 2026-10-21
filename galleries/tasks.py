@@ -85,11 +85,11 @@ def gallery_ready_email(gallery_id):
         token = signing.dumps(str(gallery.pk), salt=SHARE_SALT)
         link = f"{settings.SITE_URL}/api/gallery-view/{token}/"
         send_mail(
-            subject="Tus fotos están listas",
+            subject="Your photos are ready",
             message=(
-                f"Hola {client.name},\n\n"
-                f'Tus fotos de "{gallery.shoot.title}" ya están disponibles.\n'
-                f"Enlace privado (válido 7 días): {link}\n\n"
+                f"Hello {client.name},\n\n"
+                f'The photos of "{gallery.shoot.title}" are now available.\n'
+                f"Private link (valid for 7 days): {link}\n\n"
                 "Lumen\n"
             ),
             from_email=settings.DEFAULT_FROM_EMAIL,
@@ -98,7 +98,7 @@ def gallery_ready_email(gallery_id):
     if client.user:
         notify(
             client.user,
-            "Tus fotos estan listas",
-            f'Las fotos de "{gallery.shoot.title}" ya estan disponibles',
+            "Your photos are ready",
+            f'The photos of "{gallery.shoot.title}" are now available',
         )
     return to_email

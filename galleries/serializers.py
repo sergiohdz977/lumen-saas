@@ -12,7 +12,7 @@ class GallerySerializer(serializers.ModelSerializer):
         validators=[
             UniqueValidator(
                 queryset=Gallery.objects.all(),
-                message="Esta sesión ya tiene una galería",
+                message="This shoot already has a gallery",
             )
         ],
     )
@@ -32,7 +32,7 @@ class GallerySerializer(serializers.ModelSerializer):
 
     def validate_shoot(self, value):
         if value.client.photographer != self.context["request"].user:
-            raise serializers.ValidationError("Esa sesión no es tuya")
+            raise serializers.ValidationError("That shoot does not belong to you")
         return value
 
     def create(self, validated_data):
@@ -44,8 +44,8 @@ class GallerySerializer(serializers.ModelSerializer):
 class PhotoSerializer(serializers.ModelSerializer):
     image = serializers.FileField(
         error_messages={
-            "required": "La imagen es obligatoria",
-            "empty": "El archivo está vacío",
+            "required": "The image is required",
+            "empty": "The file is empty",
         }
     )
 
@@ -88,7 +88,7 @@ class PhotoSerializer(serializers.ModelSerializer):
     def validate_gallery(self, value):
         if value.shoot.client.photographer != self.context["request"].user:
             raise serializers.ValidationError(
-                "No puedes añadir fotos a esta galería"
+                "You cannot add photos to this gallery"
             )
         return value
 
@@ -116,9 +116,9 @@ class FavoriteSerializer(serializers.ModelSerializer):
     def validate_photo(self, value):
         request = self.context["request"]
         if value.gallery.shoot.client.user != request.user:
-            raise serializers.ValidationError("No puedes guardar esa foto")
+            raise serializers.ValidationError("You cannot favorite that photo")
         if Favorite.objects.filter(photo=value, user=request.user).exists():
             raise serializers.ValidationError(
-                "Esta foto ya está en tus favoritos"
+                "This photo is already in your favorites"
             )
         return value

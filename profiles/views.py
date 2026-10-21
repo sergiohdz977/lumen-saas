@@ -52,7 +52,7 @@ class ProfileOwnedViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not hasattr(user, "profile"):
             raise ValidationError(
-                "Crea tu perfil de fotógrafo antes de añadir elementos"
+                "Create your photographer profile before adding items"
             )
         serializer.save(profile=user.profile)
 

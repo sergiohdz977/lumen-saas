@@ -51,7 +51,7 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
         booking = self.get_object()
         if booking.status != BookingRequest.Status.PENDING:
             raise ValidationError(
-                "Solo se pueden gestionar solicitudes pendientes"
+                "Only pending requests can be managed"
             )
         if new_status == BookingRequest.Status.ACCEPTED:
             self._accept(booking)
@@ -69,7 +69,7 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
             ).exists()
             if has_conflict:
                 raise ValidationError(
-                    "Ya tienes una sesión reservada en esa fecha"
+                    "You already have a shoot booked that day"
                 )
             client, _ = Client.objects.get_or_create(
                 photographer=photographer,
@@ -94,6 +94,6 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
         booking_accepted_email.delay(booking.pk)
         notify(
             booking.customer,
-            "Reserva aceptada",
-            f'Tu reserva de "{booking.package.title}" fue aceptada',
+            "Booking accepted",
+            f'Your booking for "{booking.package.title}" was accepted',
         )
