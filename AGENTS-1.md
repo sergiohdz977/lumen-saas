@@ -163,7 +163,8 @@ payments/    payment provider integration
   254 tests passing.
 - Step 19 (Docker) postponed to the end (slow internet): files exist in commit
   a846525, reverted in aa9defd, restore with `git revert aa9defd` when ready.
-- Now: step 23 — switch to PostgreSQL, production settings, environment variables.
+- Now: step 24 — deploy (Railway or the chosen host). PostgreSQL 18 is installed
+  locally; local runs still default to SQLite unless `POSTGRES_DB` is set in .env.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

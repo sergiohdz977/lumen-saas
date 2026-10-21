@@ -119,6 +119,27 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+### Database
+
+Development uses SQLite (`db.sqlite3`, no setup). To use **PostgreSQL**
+(production, or locally with a real server), put this in `.env`:
+
+```env
+POSTGRES_DB=lumen
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your-password
+```
+
+and run `python manage.py migrate` again (same commands work for both).
+
+### Production environment
+
+With `DJANGO_DEBUG=0` Django switches to production behavior: real
+`DJANGO_SECRET_KEY` required (it refuses to boot with the insecure dev key),
+secure cookies, TLS proxy header, `DJANGO_ALLOWED_HOSTS` /
+`DJANGO_CSRF_TRUSTED_ORIGINS` from env. Optional: `DJANGO_SSL_REDIRECT=1`,
+`DJANGO_HSTS_SECONDS=31536000`.
+
 Background tasks (thumbnails and emails) need Redis/Memurai running and a Celery worker
 (in a second terminal; Windows requires the `solo` pool):
 
