@@ -17,6 +17,8 @@ class PhotographerProfile(models.Model):
     specialties = models.CharField(max_length=200, blank=True)
     phone = models.CharField(max_length=30, blank=True)
     is_published = models.BooleanField(default=False)
+    stripe_account_id = models.CharField(max_length=255, blank=True, default="")
+    stripe_onboarded = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -73,4 +75,3 @@ class PortfolioPhoto(models.Model):
     def __str__(self):
         return self.caption or f"Foto #{self.pk}"
 
-    

@@ -90,13 +90,17 @@ gallery created (to the customer), new review (to the photographer).
 
 Stripe deposits for accepted bookings (20% of the package price, test keys
 first — put `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in `.env`).
+**Stripe Connect destination charges**: the money goes straight from the
+customer to the photographer's Stripe account; an optional platform fee
+(`STRIPE_PLATFORM_FEE_PERCENTAGE`, default 0) stays with the app.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/payments/checkout/` | Customer starts the deposit for an accepted booking (`{"booking": id}`); returns `checkout_url` (Stripe-hosted page) |
+| POST | `/api/payments/onboard/` | Photographer: create their Stripe Express account + hosted onboarding form (`{"country": "ES"}`); returns `onboarding_url` |
+| POST | `/api/payments/checkout/` | Customer starts the deposit for an accepted booking (`{"booking": id}`); returns `checkout_url` (Stripe-hosted page). Blocked until the photographer finishes onboarding |
 | GET | `/api/payments/` | Customer: payments made / Photographer: deposits received |
 | GET | `/api/payments/{id}/` | Payment detail |
-| POST | `/api/payments/webhook/` | Stripe calls this (signature verified); marks the payment `paid` and notifies both sides. Idempotent |
+| POST | `/api/payments/webhook/` | Stripe calls this (signature verified): `checkout.session.completed` marks the payment `paid` + notifies both sides; `account.updated` flags the photographer as onboarded. Idempotent |
 
 Test card: `4242 4242 4242 4242`, any future date, any CVC.
 

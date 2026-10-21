@@ -177,6 +177,10 @@ STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 # Deposit due to confirm a booking, as a percentage of the package price.
 DEPOSIT_PERCENTAGE = 20
+# Platform commission taken from each deposit (Stripe Connect fee).
+STRIPE_PLATFORM_FEE_PERCENTAGE = int(
+    os.getenv("STRIPE_PLATFORM_FEE_PERCENTAGE", "0")
+)
 
 # Cloudinary photo storage. With no credentials the project falls back
 # to local storage (see galleries/storage.py).

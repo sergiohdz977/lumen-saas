@@ -1,9 +1,10 @@
 from decimal import Decimal
+from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import stripe
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -50,6 +51,8 @@ class PaymentTestCase(TestCase):
             studio_name="Ana Studio",
             slug="ana-studio",
             is_published=True,
+            stripe_account_id="acct_test_1",
+            stripe_onboarded=True,
         )
         cls.package = Package.objects.create(
             profile=cls.profile,
@@ -104,6 +107,35 @@ class CheckoutTests(PaymentTestCase):
         self.assertEqual(payment.status, Payment.Status.PENDING)
         self.assertEqual(payment.amount_cents, 4000)
         self.assertEqual(mock_create.call_args.kwargs["amount_cents"], 4000)
+        self.assertEqual(
+            mock_create.call_args.kwargs["destination_account"], "acct_test_1"
+        )
+
+    def test_checkout_blocked_when_photographer_not_onboarded(self):
+        self.profile.stripe_onboarded = False
+        self.profile.save(update_fields=["stripe_onboarded"])
+        self.api.force_authenticate(self.maria)
+        with self._patch_session():
+            response = self.api.post(
+                "/api/payments/checkout/",
+                {"booking": self.booking.pk},
+                format="json",
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("setting up payments", str(response.data))
+
+    def test_platform_fee_is_computed_when_configured(self):
+        self.api.force_authenticate(self.maria)
+        with self._patch_session() as mock_create:
+            with override_settings(STRIPE_PLATFORM_FEE_PERCENTAGE=10):
+                self.api.post(
+                    "/api/payments/checkout/",
+                    {"booking": self.booking.pk},
+                    format="json",
+                )
+        self.assertEqual(
+            mock_create.call_args.kwargs["platform_fee_cents"], 400
+        )
 
     def test_checkout_requires_accepted_booking(self):
         self.api.force_authenticate(self.maria)
@@ -176,6 +208,45 @@ class WebhookTests(PaymentTestCase):
             amount_cents=4000,
             stripe_session_id="cs_test_123",
         )
+
+    def test_account_updated_marks_profile_onboarded(self):
+        self.profile.stripe_onboarded = False
+        self.profile.save(update_fields=["stripe_onboarded"])
+        event = {
+            "type": "account.updated",
+            "data": {
+                "object": {
+                    "id": "acct_test_1",
+                    "details_submitted": True,
+                }
+            },
+        }
+        with patch(
+            "payments.providers.construct_webhook_event",
+            return_value=event,
+        ):
+            response = self.api.post(
+                "/api/payments/webhook/", {"noop": True}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.stripe_onboarded)
+
+    def test_account_updated_for_unknown_account_is_ignored(self):
+        event = {
+            "type": "account.updated",
+            "data": {
+                "object": {"id": "acct_ghost", "details_submitted": True}
+            },
+        }
+        with patch(
+            "payments.providers.construct_webhook_event",
+            return_value=event,
+        ):
+            response = self.api.post(
+                "/api/payments/webhook/", {"noop": True}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def _post_webhook(self, event):
         with patch(
@@ -259,3 +330,75 @@ class PaymentVisibilityTests(PaymentTestCase):
             response.status_code,
             [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
         )
+
+
+class OnboardTests(PaymentTestCase):
+    def _patch_provider(self, account_id="acct_new"):
+        stack = ExitStack()
+        stack.enter_context(
+            patch(
+                "payments.providers.create_connected_account",
+                return_value=SimpleNamespace(id=account_id),
+            )
+        )
+        stack.enter_context(
+            patch(
+                "payments.providers.create_account_link",
+                return_value=SimpleNamespace(
+                    url=f"https://connect.stripe.test/{account_id}"
+                ),
+            )
+        )
+        return stack
+
+    def test_photographer_gets_onboarding_url(self):
+        self.profile.stripe_account_id = ""
+        self.profile.save(update_fields=["stripe_account_id"])
+        self.api.force_authenticate(self.ana)
+        with self._patch_provider():
+            response = self.api.post(
+                "/api/payments/onboard/", {"country": "es"}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("onboarding_url", response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.stripe_account_id, "acct_new")
+
+    def test_second_onboarding_reuses_existing_account(self):
+        self.api.force_authenticate(self.ana)
+        with self._patch_provider():
+            response = self.api.post(
+                "/api/payments/onboard/", {"country": "ES"}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.stripe_account_id, "acct_test_1")
+
+    def test_customer_cannot_onboard(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            "/api/payments/onboard/", {"country": "US"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_photographer_without_profile_is_rejected(self):
+        carlos = User.objects.create_user(
+            username="carlos",
+            email="carlos@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        self.api.force_authenticate(carlos)
+        response = self.api.post(
+            "/api/payments/onboard/", {"country": "US"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("photographer profile", str(response.data))
+
+    def test_invalid_country_is_rejected(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/payments/onboard/", {"country": "Spain"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("2-letter", str(response.data))

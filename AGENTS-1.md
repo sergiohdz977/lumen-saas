@@ -156,9 +156,9 @@ payments/    payment provider integration
 
 ## Current state
 - Done: Phase 1 + Phase 2 + Phase 3 complete (steps 12-18) + step 20 (notifications
-  over WebSockets) + step 21 (Stripe deposit payments via Checkout + signed
-  idempotent webhook) + product language switched to English everywhere. 230 tests
-  passing.
+  over WebSockets) + step 21 (Stripe deposits) + step 21b (Stripe Connect:
+  photographer onboarding + destination charges, no manual payouts) + product
+  language switched to English everywhere. 239 tests passing.
 - Step 19 (Docker) postponed to the end (slow internet): files exist in commit
   a846525, reverted in aa9defd, restore with `git revert aa9defd` when ready.
 - Now: step 22 — subscription plans for photographers.

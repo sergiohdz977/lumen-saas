@@ -4,7 +4,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from users.models import User
-from users.permissions import IsCustomer
+from users.permissions import IsCustomer, IsPhotographer
 
 from . import providers, services
 from .models import Payment
@@ -22,6 +22,8 @@ class PaymentViewSet(
     def get_permissions(self):
         if self.action == "checkout":
             return [IsAuthenticated(), IsCustomer()]
+        if self.action == "onboard":
+            return [IsAuthenticated(), IsPhotographer()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -34,6 +36,13 @@ class PaymentViewSet(
         if user.role == User.ROLE_CUSTOMER:
             return qs.filter(customer=user)
         return qs.filter(photographer=user)
+
+    @action(detail=False, methods=["post"])
+    def onboard(self, request):
+        url = services.start_onboarding(
+            request.user, request.data.get("country")
+        )
+        return Response({"onboarding_url": url}, status=201)
 
     @action(detail=False, methods=["post"])
     def checkout(self, request):

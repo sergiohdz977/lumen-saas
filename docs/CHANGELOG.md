@@ -55,6 +55,7 @@
 - Step 20 - notifications: new `notifications` app (`Notification` model, REST history with read/read-all, WebSocket at `/ws/notifications/` with JWT-in-query or session auth, `notify()` helper); live pushes on booking accept, gallery delivery and new review; ASGI config with origin validator; channels + channels-redis + daphne added (216 passing total)
 - Language switch - product is now English-first (pivot away from the Cuba market): all user-facing strings (validation errors, emails, notification texts, choice labels) converted to English, tests updated, AGENTS-1 language rules rewritten; Stripe chosen as the payment provider (216 passing total)
 - Step 21 - payments: new `payments` app (Stripe Checkout deposits, 20% of the package price, `DEPOSIT_PERCENTAGE` setting); `Payment` model (pending/paid, amount in cents, unique session id), thin `providers.py` swap layer, signed webhook with idempotency, notifications on payment, role-based list (customer vs photographer); stripe==16.0.0 added (230 passing total)
+- Step 21b - Stripe Connect: photographers onboarding (`POST /api/payments/onboard/` -> Express account + hosted form, `stripe_account_id`/`stripe_onboarded` on the profile, `account.updated` webhook), deposits become destination charges (money flows customer -> photographer, optional `STRIPE_PLATFORM_FEE_PERCENTAGE` platform fee), checkout blocked until onboarding completes (239 passing total)
 - Next: step 22 - subscription plans for photographers
 
 
