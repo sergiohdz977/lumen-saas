@@ -26,17 +26,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
+def _env(name, default=""):
+    """Read an env var, treating empty values as unset (.env placeholders)."""
+    return os.getenv(name) or default
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # Insecure fallback for development only; production requires a real key.
-SECRET_KEY = os.getenv(
+SECRET_KEY = _env(
     "DJANGO_SECRET_KEY",
     "django-insecure-totmwzcj3i$pg3q_x)8b*0-xapa=myliu-yj%xh1jz)px6xv-x",
 )
 
 # DJANGO_DEBUG=0 enables production behavior (see the bottom of this file).
-DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
+DEBUG = _env("DJANGO_DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -63,6 +68,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'drf_spectacular',
     'channels',
     'users',
     'clients',
@@ -278,6 +284,19 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# Interactive API documentation (Swagger UI at /api/docs/).
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Lumen API",
+    "DESCRIPTION": (
+        "Photography SaaS: auth and roles, marketplace, bookings, "
+        "private galleries, reviews, notifications, Stripe payments "
+        "and Pro subscriptions."
+    ),
+    "VERSION": "1.0.0",
+    "COMPONENT_SPLIT_REQUEST": True,
 }
 
 

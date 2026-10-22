@@ -1,13 +1,66 @@
-# lumen
+# Lumen
 
-A SaaS platform for photographers to manage clients,
-shoots, and private galleries.
+A SaaS backend for photographers: marketplace, bookings, private galleries,
+reviews, real-time notifications and Stripe payments — with a free tier and a
+Pro subscription for photographers.
 
-## Status
+**Status**: backend complete (roadmap phases 1-4), **254 tests passing**,
+ready to deploy ([docs/DEPLOY.md](docs/DEPLOY.md)).
 
-- In development
+## Features
 
-## Auth (current)
+- JWT auth with two roles: `photographer` and `customer`
+- Marketplace: searchable profiles (`?city=`, `?specialty=`), packages and
+  portfolios, paginated
+- Bookings with real business rules: atomic accept, same-day conflict check,
+  one gallery per shoot, terminal rejection
+- Private galleries: signed share links, favorites, download counters
+- Background work with Celery: photo variants (thumbnail + HD preview) and emails
+- Real-time notifications over WebSockets (Django Channels)
+- Stripe: deposit checkouts (Connect destination charges, money goes straight
+  to the photographer), hosted onboarding and monthly Pro subscriptions
+- Free plan limits enforced by the API: 3 galleries / 100 photos (Pro unlimited)
+
+## Tech stack
+
+Django 6.1 · Django REST Framework · SimpleJWT · Channels · Celery ·
+PostgreSQL (SQLite in development) · Redis/Memurai · Cloudinary · Stripe ·
+drf-spectacular · Pillow · WhiteNoise
+
+## Quick start
+
+```bash
+git clone https://github.com/sergiohdz977/lumen-saas.git
+cd lumen-saas
+python -m venv venv
+venv\Scripts\python -m pip install -r requirements.txt
+copy .env.example .env            # Windows (cp .env.example .env on Linux)
+python manage.py migrate
+python manage.py runserver
+```
+
+Background tasks (thumbnails and emails) need Redis/Memurai running and a
+Celery worker in a second terminal (Windows requires the `solo` pool):
+
+```bash
+venv\Scripts\celery.exe -A config worker --pool=solo -l info
+```
+
+Emails are printed to the worker terminal in development (console backend):
+booking accept and gallery delivery send a message with a private share link.
+
+## API documentation
+
+- **Interactive Swagger UI**: <http://127.0.0.1:8000/api/docs/>
+- **OpenAPI schema**: `GET /api/schema/` (committed copy in
+  [docs/api-schema.yml](docs/api-schema.yml))
+- **Auth**: `POST /api/auth/login/` → `access` token → send it as
+  `Authorization: Bearer <token>` on every request
+- List endpoints return `{count, next, previous, results}` (10 per page)
+
+## Endpoints
+
+### Auth
 
 Roles are chosen at registration: `photographer` or `customer` (default).
 
@@ -17,15 +70,14 @@ Roles are chosen at registration: `photographer` or `customer` (default).
 | POST | `/api/auth/login/` | Obtain JWT (`access` / `refresh`) |
 | POST | `/api/auth/token/refresh/` | Refresh the access token |
 
-## Marketplace (current)
+### Marketplace
 
-Public endpoints (no auth required). List responses are paginated
-(`count`, `next`, `previous`, `results`; 10 per page).
+Public endpoints (no auth required).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/profiles/` | List published profiles (filters: `?city=`, `?specialty=`) |
-| GET | `/api/profiles/{slug}/` | Profile detail |
+| GET | `/api/profiles/{slug}/` | Profile detail (includes `plan`: free/pro) |
 | GET | `/api/packages/` | List packages (filter: `?profile={slug}`) |
 | GET | `/api/packages/{id}/` | Package detail |
 | GET | `/api/portfolio-photos/` | List portfolio photos |
@@ -34,7 +86,7 @@ Public endpoints (no auth required). List responses are paginated
 Photographer endpoints (JWT + `role=photographer`): full CRUD on `/api/packages/` and
 `/api/portfolio-photos/` for their own catalog. Also `/api/clients/` and `/api/shoots/`.
 
-## Bookings (current)
+### Bookings
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -43,16 +95,16 @@ Photographer endpoints (JWT + `role=photographer`): full CRUD on `/api/packages/
 | POST | `/api/bookings/{id}/accept/` | Photographer accepts (pending only): creates the `Client` (reused) and a `Shoot` (`booked`); 400 if a shoot already exists that day |
 | POST | `/api/bookings/{id}/reject/` | Photographer rejects (pending only) |
 
-## Galleries (current)
+### Galleries
 
 Private: only the photographer of the shoot and that shoot's customer can access.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/galleries/` | Photographer: own galleries / Customer: own galleries (filter: `?shoot=`) |
-| POST | `/api/galleries/` | Photographer creates a gallery for one of their shoots (unique per shoot) |
+| POST | `/api/galleries/` | Photographer creates a gallery for one of their shoots (unique per shoot; Free plan limited to 3) |
 | GET | `/api/photos/` | Same access rules as galleries (filter: `?gallery=`) |
-| POST | `/api/photos/` | Photographer adds a photo: `multipart/form-data` with `gallery`, `image` (file) and optional `caption`. The response includes `thumbnail` (empty until the Celery worker generates it) |
+| POST | `/api/photos/` | Photographer adds a photo: `multipart/form-data` with `gallery`, `image` (file) and optional `caption`. The response includes `thumbnail` (empty until the Celery worker generates it). Free plan limited to 100 photos |
 | POST | `/api/photos/{id}/download/` | Register a download: `{"version": "light"}` (HD preview) or `{"version": "original"}` (default). Separate counters per version |
 | POST | `/api/favorites/` | Customer favorites a photo of their own gallery (`{"photo": id}`) |
 | GET | `/api/favorites/` | Customer: their favorites / Photographer: client favorites on their own photos (with `customer_username` and thumbnail). Filter: `?photo=` |
@@ -60,7 +112,7 @@ Private: only the photographer of the shoot and that shoot's customer can access
 | POST | `/api/galleries/{id}/share-link/` | Photographer generates a signed share link for a customer (valid 7 days) |
 | GET | `/api/gallery-view/{token}/` | Public: open gallery + photos with the share link, no login required |
 
-## Reviews (current)
+### Reviews
 
 Customers rate photographers they have worked with (1-5 + optional comment).
 
@@ -71,7 +123,7 @@ Customers rate photographers they have worked with (1-5 + optional comment).
 | PATCH | `/api/reviews/{id}/` | Customer edits their own review |
 | DELETE | `/api/reviews/{id}/` | Customer deletes their own review |
 
-## Notifications (current)
+### Notifications
 
 Real-time (WebSocket) + history (REST). Needs Redis/Memurai running for live
 pushes; the rows are always saved even without it.
@@ -86,7 +138,7 @@ pushes; the rows are always saved even without it.
 Events that create a notification: booking accepted (to the customer),
 gallery created (to the customer), new review (to the photographer).
 
-## Payments (current)
+### Payments
 
 Stripe deposits for accepted bookings (20% of the package price, test keys
 first — put `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in `.env`).
@@ -112,21 +164,17 @@ Photographers start on **Free**: up to `FREE_TIER_GALLERIES` (3) galleries and
 unlimited; the plan lives on the profile (`plan` field, public in the profile
 response) and is kept in sync by the subscription webhook.
 
-## Run locally
+## Tests
 
 ```bash
-python manage.py migrate
-python manage.py runserver
+venv\Scripts\python.exe manage.py test
 ```
 
-## Deploy
+Fully isolated: temporary media folder, eager Celery, in-memory channel layer,
+no network (no Redis, Cloudinary or Stripe needed). **254 tests** covering
+permissions, business rules, uploads, webhooks and plan limits.
 
-See [docs/DEPLOY.md](docs/DEPLOY.md) for the step-by-step Railway guide
-(app + PostgreSQL + Redis + env vars + Stripe webhook). The `Procfile`
-runs Daphne (HTTP + WebSockets), migrations on release, and Celery in a
-second service.
-
-### Database
+## Database
 
 Development uses SQLite (`db.sqlite3`, no setup). To use **PostgreSQL**
 (production, or locally with a real server), put this in `.env`:
@@ -138,8 +186,9 @@ POSTGRES_PASSWORD=your-password
 ```
 
 and run `python manage.py migrate` again (same commands work for both).
+Hosted platforms usually provide a `DATABASE_URL`, which is also understood.
 
-### Production environment
+## Production environment
 
 With `DJANGO_DEBUG=0` Django switches to production behavior: real
 `DJANGO_SECRET_KEY` required (it refuses to boot with the insecure dev key),
@@ -147,12 +196,27 @@ secure cookies, TLS proxy header, `DJANGO_ALLOWED_HOSTS` /
 `DJANGO_CSRF_TRUSTED_ORIGINS` from env. Optional: `DJANGO_SSL_REDIRECT=1`,
 `DJANGO_HSTS_SECONDS=31536000`.
 
-Background tasks (thumbnails and emails) need Redis/Memurai running and a Celery worker
-(in a second terminal; Windows requires the `solo` pool):
+## Deploy
 
-```bash
-venv\Scripts\celery.exe -A config worker --pool=solo -l info
+See [docs/DEPLOY.md](docs/DEPLOY.md) for the step-by-step Railway guide
+(app + PostgreSQL + Redis + env vars + Stripe webhook). The `Procfile`
+runs Daphne (HTTP + WebSockets), migrations on release, and Celery in a
+second service.
+
+## Project structure
+
+```
+config/        settings, urls, ASGI (WebSockets), Celery app
+users/         custom User (roles), JWT auth
+clients/       customer records per photographer
+shoots/        shoot lifecycle (booked → editing → delivered)
+profiles/      photographer profile, packages, portfolio
+bookings/      booking requests and accept/reject flow
+galleries/     private galleries, photos, favorites, share links
+reviews/       1-5 ratings between customers and photographers
+notifications/ REST history + WebSocket push
+payments/      Stripe deposits, Connect onboarding, Pro subscriptions
+docs/          DEPLOY.md, CHANGELOG.md, api-schema.yml
 ```
 
-Emails are printed to the worker terminal in development (console backend):
-booking accept and gallery delivery send a message with a private share link.
+See [AGENTS-1.md](AGENTS-1.md) for the roadmap and conventions.

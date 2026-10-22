@@ -166,7 +166,9 @@ payments/    payment provider integration
 - Step 24 prepared the code for deploy (Procfile, DATABASE_URL, WhiteNoise,
   docs/DEPLOY.md); the live Railway project must be created by the user
   (account + payment method).
-- Now: step 25 — README with screenshots, API docs, CHANGELOG cleanup.
+- Step 25 done: drf-spectacular API docs (/api/docs/ + /api/schema/),
+  README rewritten, CHANGELOG reorganized. 254 tests passing.
+- Now: step 26 — clean code and verify the project runs from scratch.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.
