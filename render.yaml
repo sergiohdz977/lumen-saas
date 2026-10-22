@@ -1,0 +1,68 @@
+# Render blueprint: free web + worker + Redis (database lives in Neon).
+# Create via: New + Blueprint -> pick this repo. Then fill the sync:false
+# variables in the dashboard (DATABASE_URL from Neon, Stripe, Cloudinary).
+
+envVarGroups:
+  - name: lumen-shared
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DATABASE_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRO_PRICE_ID
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+services:
+  - type: web
+    name: lumen-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    startCommand: sh -c "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p $PORT config.asgi:application"
+    healthCheckPath: /api/schema/
+    envVars:
+      - fromGroup: lumen-shared
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: lumen-redis
+          property: connectionString
+      - key: DJANGO_ALLOWED_HOSTS
+        sync: false
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        sync: false
+      - key: SITE_URL
+        sync: false
+
+  - type: worker
+    name: lumen-worker
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A config worker -l info
+    envVars:
+      - fromGroup: lumen-shared
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: lumen-redis
+          property: connectionString
+
+databases:
+  - name: lumen-redis
+    type: redis
+    plan: free

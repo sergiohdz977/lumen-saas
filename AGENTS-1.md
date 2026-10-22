@@ -161,8 +161,9 @@ payments/    payment provider integration
   photographer onboarding + destination charges) + step 22 (Pro subscriptions
   with Free tier limits) + product language switched to English everywhere.
   254 tests passing.
-- Step 19 (Docker) postponed to the end (slow internet): files exist in commit
-  a846525, reverted in aa9defd, restore with `git revert aa9defd` when ready.
+- Step 19 (Docker): written in a846525, reverted in aa9defd; recreated
+  fresh in the working tree (see the Docker bullet below — do NOT use
+  `git revert aa9defd` anymore, the old files used gunicorn/WSGI).
 - Step 24 prepared the code for deploy (Procfile, DATABASE_URL, WhiteNoise,
   docs/DEPLOY.md); the live Railway project must be created by the user
   (account + payment method).
@@ -171,10 +172,25 @@ payments/    payment provider integration
 - Step 26 done: cleanup (unused imports, trailing whitespace, leftover
   Spanish in test data, requirements.txt synced with the installed env)
   and from-scratch verification (clean copy without .env/DB: migrate +
-  254 tests OK). **Roadmap steps 1-26 complete** (19 Docker still to
-  restore at the end).
-- Now: awaiting the user's live Railway deploy (docs/DEPLOY.md) and the
-  Docker restore (`git revert aa9defd`).
+  254 tests OK). **Roadmap steps 1-26 complete**.
+- Deploy decision (user has NO card, from Cuba): **Render free** (no card,
+  fits all 4 services; free Postgres expires every 30 days → recreate +
+  reseed; free web spins down after 15 min → ~1 min cold start; SMTP
+  blocked on free → no real emails in demo). Railway = 30-day trial only.
+  Cloudinary account is MANDATORY before demo (Render disk is ephemeral).
+- Docker (step 19): 3 base images already pulled (python:3.13-slim,
+  postgres:16-alpine, redis:7-alpine; Docker Hub 403'd user's IP — pull
+  with VPN on, or use public.ecr.aws/docker/library/<image> fallback).
+  Files recreated fresh (not `git revert aa9defd`): Dockerfile (daphne
+  ASGI, NOT the old gunicorn), docker-compose.yml, .dockerignore —
+  currently UNCOMMITTED. Remaining: `docker compose build` (pip ~200 MB
+  inside container, VPN on) then `docker compose up`.
+- Now: user deploying on **Render + Neon** (Option A of docs/DEPLOY.md).
+  `render.yaml` blueprint written (web + worker + free Redis; DATABASE_URL
+  and secrets filled in the Render dashboard). Uncommitted files:
+  render.yaml, Dockerfile, docker-compose.yml, .dockerignore, AGENTS-1.md.
+  Also pending after deploy: Cloudinary account (mandatory for photos),
+  Stripe webhook + STRIPE_PRO_PRICE_ID. Docker build still pending (VPN).
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.
