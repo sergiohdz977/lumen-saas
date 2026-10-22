@@ -163,8 +163,10 @@ payments/    payment provider integration
   254 tests passing.
 - Step 19 (Docker) postponed to the end (slow internet): files exist in commit
   a846525, reverted in aa9defd, restore with `git revert aa9defd` when ready.
-- Now: step 24 — deploy (Railway or the chosen host). PostgreSQL 18 is installed
-  locally; local runs still default to SQLite unless `POSTGRES_DB` is set in .env.
+- Step 24 prepared the code for deploy (Procfile, DATABASE_URL, WhiteNoise,
+  docs/DEPLOY.md); the live Railway project must be created by the user
+  (account + payment method).
+- Now: step 25 — README with screenshots, API docs, CHANGELOG cleanup.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

@@ -119,6 +119,13 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+## Deploy
+
+See [docs/DEPLOY.md](docs/DEPLOY.md) for the step-by-step Railway guide
+(app + PostgreSQL + Redis + env vars + Stripe webhook). The `Procfile`
+runs Daphne (HTTP + WebSockets), migrations on release, and Celery in a
+second service.
+
 ### Database
 
 Development uses SQLite (`db.sqlite3`, no setup). To use **PostgreSQL**

@@ -14,6 +14,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
@@ -78,6 +79,8 @@ AUTH_USER_MODEL = "users.User"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serves collectstatic files efficiently (needed when DEBUG=False).
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -110,9 +113,26 @@ ASGI_APPLICATION = 'config.asgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-# PostgreSQL when POSTGRES_DB is set (production / local with a real server);
-# SQLite otherwise (quick development and the default test run).
-if os.getenv("POSTGRES_DB"):
+def _database_from_url(url):
+    """Parse a DATABASE_URL (postgresql://user:pass@host:port/db)."""
+    parsed = urlparse(url)
+    return {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": parsed.path.lstrip("/"),
+        "USER": parsed.username or "",
+        "PASSWORD": parsed.password or "",
+        "HOST": parsed.hostname or "localhost",
+        "PORT": str(parsed.port or 5432),
+        # Keep connections alive a bit (hosts reset connections often).
+        "CONN_MAX_AGE": 600,
+    }
+
+
+# PostgreSQL via DATABASE_URL (Railway, Neon, Render...) or the POSTGRES_*
+# variables; SQLite otherwise (quick development and the default test run).
+if os.getenv("DATABASE_URL"):
+    DATABASES = {"default": _database_from_url(os.getenv("DATABASE_URL"))}
+elif os.getenv("POSTGRES_DB"):
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -167,6 +187,17 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+# collectstatic output; WhiteNoise serves it in production.
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
 
 # Uploaded photos
 MEDIA_URL = "/media/"
