@@ -18,7 +18,7 @@ class GalleryViewSet(viewsets.ModelViewSet):
     serializer_class = GallerySerializer
     permission_classes = [IsAuthenticated]
     queryset = Gallery.objects.all()
-    
+
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
             return [IsAuthenticated()]

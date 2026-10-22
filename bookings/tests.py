@@ -78,7 +78,7 @@ class BookingEndpointsTests(TestCase):
         self.valid_payload = {
             "package": self.package.pk,
             "date": "2026-12-15T15:00:00Z",
-            "message": "Quiero reservar",
+            "message": "I want to book",
         }
 
     def test_anonymous_create_is_denied(self):
@@ -100,7 +100,7 @@ class BookingEndpointsTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["status"], "pending")
         self.assertEqual(response.data["customer_username"], "maria")
-        booking = BookingRequest.objects.get(package=self.package, message="Quiero reservar")
+        booking = BookingRequest.objects.get(package=self.package, message="I want to book")
         self.assertEqual(booking.customer, self.customer)
         self.assertEqual(booking.status, BookingRequest.Status.PENDING)
 
@@ -449,7 +449,7 @@ class MarketplaceJourneyTests(TestCase):
             {
                 "package": package_id,
                 "date": "2026-11-20T15:00:00Z",
-                "message": "Quiero reservar",
+                "message": "I want to book",
             },
             format="json",
         )

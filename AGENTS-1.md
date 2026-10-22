@@ -168,7 +168,13 @@ payments/    payment provider integration
   (account + payment method).
 - Step 25 done: drf-spectacular API docs (/api/docs/ + /api/schema/),
   README rewritten, CHANGELOG reorganized. 254 tests passing.
-- Now: step 26 — clean code and verify the project runs from scratch.
+- Step 26 done: cleanup (unused imports, trailing whitespace, leftover
+  Spanish in test data, requirements.txt synced with the installed env)
+  and from-scratch verification (clean copy without .env/DB: migrate +
+  254 tests OK). **Roadmap steps 1-26 complete** (19 Docker still to
+  restore at the end).
+- Now: awaiting the user's live Railway deploy (docs/DEPLOY.md) and the
+  Docker restore (`git revert aa9defd`).
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

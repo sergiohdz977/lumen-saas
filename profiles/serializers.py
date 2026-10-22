@@ -54,6 +54,6 @@ class PortfolioPhotoSerializer(serializers.ModelSerializer):
             "profile_slug",
             "studio_name",
             "image",
-            "caption",  
+            "caption",
         ]
         read_only_fields = ["id", "profile_slug", "studio_name"]

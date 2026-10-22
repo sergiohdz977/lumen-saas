@@ -261,7 +261,7 @@ CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "")
 if CLOUDINARY_CLOUD_NAME and "test" not in sys.argv:
     import cloudinary
 
-    cloudinary.config(  
+    cloudinary.config(
         cloud_name=CLOUDINARY_CLOUD_NAME,
         api_key=os.getenv("CLOUDINARY_API_KEY", ""),
         api_secret=os.getenv("CLOUDINARY_API_SECRET", ""),

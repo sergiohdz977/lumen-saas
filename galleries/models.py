@@ -18,7 +18,7 @@ class Gallery(models.Model):
     def __str__(self):
         return f"Galeria de {self.shoot.title}"
 
-    
+
 class Photo(models.Model):
     gallery = models.ForeignKey(
         Gallery,

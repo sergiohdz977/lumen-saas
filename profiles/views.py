@@ -31,7 +31,7 @@ class PhotographerProfileViewSet(viewsets.ReadOnlyModelViewSet):
 class ProfileOwnedViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
-            return [AllowAny()] 
+            return [AllowAny()]
         return [IsAuthenticated(), IsPhotographer()]
 
     def get_queryset(self):

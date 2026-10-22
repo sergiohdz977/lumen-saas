@@ -98,5 +98,8 @@ suite after each step.
 
 ## Next
 
-- Step 26 — clean code and verify the project runs from scratch
+- Live deploy: create the Railway project and follow `docs/DEPLOY.md` (user)
 - Step 19 — restore Docker (`git revert aa9defd`) before/with the final deploy
+- Post-roadmap backlog: real SMTP provider for production emails, CI with
+  GitHub Actions, frontend (Swagger ready at `/api/docs/`), usage endpoint
+  (galleries/photos quota), Stripe billing portal, Sentry

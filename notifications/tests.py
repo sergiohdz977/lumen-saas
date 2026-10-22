@@ -9,7 +9,6 @@ from bookings.models import BookingRequest
 from clients.models import Client
 from config.asgi import application
 from profiles.models import Package, PhotographerProfile
-from reviews.models import Review
 from shoots.models import Shoot
 from users.models import User
 

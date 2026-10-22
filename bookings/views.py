@@ -1,5 +1,5 @@
 from django.db import transaction
-from rest_framework import viewsets, status
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -25,7 +25,7 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), IsPhotographer()]
         return [IsAuthenticated()]
 
-    def get_queryset(self):  
+    def get_queryset(self):
         user = self.request.user
         qs = BookingRequest.objects.select_related(
             "package__profile", "customer"
