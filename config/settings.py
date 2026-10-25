@@ -56,6 +56,16 @@ CSRF_TRUSTED_ORIGINS = [
     for origin in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
     if origin.strip()
 ]
+# Browser origins allowed to call this API from another port
+# (VS Code Live Server frontend runs on localhost:5500).
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "DJANGO_CORS_ALLOWED_ORIGINS",
+        "http://localhost:5500,http://127.0.0.1:5500",
+    ).split(",")
+    if origin.strip()
+]
 
 
 # Application definition
@@ -70,6 +80,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'channels',
+    'corsheaders',
     'users',
     'clients',
     'shoots',
@@ -84,6 +95,8 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL = "users.User"
 
 MIDDLEWARE = [
+    # CORS must run before any middleware that generates responses.
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     # Serves collectstatic files efficiently (needed when DEBUG=False).
     'whitenoise.middleware.WhiteNoiseMiddleware',

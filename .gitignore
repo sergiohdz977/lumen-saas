@@ -6,3 +6,6 @@ db.sqlite3
 .vscode/
 /media/
 /staticfiles/
+
+# Local run/demo scripts (machine-specific paths).
+*.bat
