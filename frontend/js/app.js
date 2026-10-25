@@ -43,20 +43,22 @@ function cardHtml(profile) {
     .join("");
 
   return `
-    <article class="card">
-      <div class="card-top">
-        <div class="avatar">${escapeHtml(initial)}</div>
-        ${planBadge}
-      </div>
-      <h2>${escapeHtml(name)}</h2>
-      <p class="meta">${escapeHtml(profile.city || "Location not set")} · @${escapeHtml(
-        profile.username
-      )}</p>
-      <p class="bio">${escapeHtml(
-        profile.bio || "This photographer has not added a bio yet."
-      )}</p>
-      <div class="chips">${chips}</div>
-    </article>`;
+    <a class="card-link" href="profile.html?slug=${encodeURIComponent(profile.slug)}">
+      <article class="card">
+        <div class="card-top">
+          <div class="avatar">${escapeHtml(initial)}</div>
+          ${planBadge}
+        </div>
+        <h2>${escapeHtml(name)}</h2>
+        <p class="meta">${escapeHtml(profile.city || "Location not set")} · @${escapeHtml(
+          profile.username
+        )}</p>
+        <p class="bio">${escapeHtml(
+          profile.bio || "This photographer has not added a bio yet."
+        )}</p>
+        <div class="chips">${chips}</div>
+      </article>
+    </a>`;
 }
 
 async function loadPage(url) {
@@ -194,3 +196,11 @@ loadMoreBtn.addEventListener("click", () => {
 updateAuthUI();
 verifyToken();
 loadPage(`${API}/profiles/`);
+
+if (
+  new URLSearchParams(window.location.search).get("login") === "1" &&
+  !localStorage.getItem(STORAGE.access)
+) {
+  openLogin();
+  history.replaceState(null, "", "index.html");
+}

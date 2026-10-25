@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lumen — Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="logo" href="index.html">Lumen<span class="logo-dot">.</span></a>
+      <nav class="nav">
+        <a href="index.html#photographers">Photographers</a>
+        <a href="dashboard.html" aria-current="page">Dashboard</a>
+        <span id="auth-area">
+          <button id="btn-login" class="btn btn-ghost">Log in</button>
+          <span id="auth-user" hidden>
+            <span class="auth-greeting">
+              Hi, <strong id="auth-username"></strong>
+            </span>
+            <button id="btn-logout" class="btn btn-ghost">Log out</button>
+          </span>
+        </span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="gate" class="gate" hidden>
+      <h1>Log in first</h1>
+      <p class="hero-sub">This page is private. Sign in to see your studio, plan and notifications.</p>
+      <button id="btn-go-login" class="btn">Go to log in</button>
+    </section>
+
+    <section id="dash" hidden>
+      <div class="dash-title">
+        <p class="hero-kicker">Private area</p>
+        <h1>Your dashboard</h1>
+      </div>
+
+      <p id="dash-status" class="status">Loading your dashboard…</p>
+
+      <div id="dash-content" class="dash-grid" hidden>
+        <div class="panel">
+          <h2>Account</h2>
+          <div class="kv"><span>Username</span><strong id="me-username"></strong></div>
+          <div class="kv"><span>Email</span><strong id="me-email"></strong></div>
+          <div class="kv"><span>Role</span><span class="tag" id="me-role"></span></div>
+        </div>
+
+        <div class="panel" id="profile-panel" hidden>
+          <h2>Studio</h2>
+          <div class="kv"><span>Studio</span><strong id="me-studio"></strong></div>
+          <div class="kv"><span>City</span><strong id="me-city"></strong></div>
+          <div class="kv"><span>Plan</span><span class="tag" id="me-plan"></span></div>
+          <div class="kv"><span>Published</span><strong id="me-published"></strong></div>
+          <div class="chips" id="me-chips" style="margin-top:12px"></div>
+        </div>
+
+        <div class="panel panel-wide">
+          <h2>Notifications <span class="tag" id="notif-count">0</span></h2>
+          <div id="notif-list">
+            <p class="meta">No notifications yet.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      Lumen — photography booking platform · API powered by Django REST Framework
+    </div>
+  </footer>
+
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

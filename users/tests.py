@@ -230,3 +230,36 @@ class RegisterRoleAuditTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Role must be", str(response.data))
+
+
+class MeEndpointTests(TestCase):
+    def setUp(self):
+        from profiles.models import PhotographerProfile
+
+        self.api = APIClient()
+        self.user = User.objects.create_user(
+            username="meuser",
+            email="me@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        self.profile, _ = PhotographerProfile.objects.get_or_create(
+            user=self.user,
+            defaults={"studio_name": "ME Studio", "city": "Havana"},
+        )
+        self.profile.studio_name = "ME Studio"
+        self.profile.save(update_fields=["studio_name"])
+
+    def test_me_requires_authentication(self):
+        response = self.api.get("/api/auth/me/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_me_returns_user_and_profile(self):
+        self.api.force_authenticate(user=self.user)
+        response = self.api.get("/api/auth/me/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["username"], "meuser")
+        self.assertEqual(response.data["email"], "me@test.com")
+        self.assertEqual(response.data["role"], User.ROLE_PHOTOGRAPHER)
+        self.assertEqual(response.data["profile"]["studio_name"], "ME Studio")
+        self.assertNotIn("password", str(response.data))
