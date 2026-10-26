@@ -1,4 +1,7 @@
-const API = "http://127.0.0.1:8000/api";
+const API =
+  window.location.port === "8000" || window.location.port === ""
+    ? "/api"
+    : "http://127.0.0.1:8000/api";
 
 const STORAGE = {
   access: "lumen_access",

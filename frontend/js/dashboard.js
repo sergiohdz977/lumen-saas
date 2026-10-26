@@ -1,4 +1,7 @@
-const API = "http://127.0.0.1:8000/api";
+const API =
+  window.location.port === "8000" || window.location.port === ""
+    ? "/api"
+    : "http://127.0.0.1:8000/api";
 
 const STORAGE = {
   access: "lumen_access",
@@ -15,6 +18,8 @@ const btnLogout = document.getElementById("btn-logout");
 const btnGoLogin = document.getElementById("btn-go-login");
 const authUser = document.getElementById("auth-user");
 const authUsername = document.getElementById("auth-username");
+
+let myRole = "";
 
 function clearSession() {
   localStorage.removeItem(STORAGE.access);
@@ -102,6 +107,194 @@ async function loadNotifications(access) {
   }
 }
 
+function statusChip(status) {
+  return `<span class="status-chip status-${escapeHtml(
+    status
+  )}">${escapeHtml(status)}</span>`;
+}
+
+function renderRequests(data, role) {
+  document.getElementById("requests-panel").hidden = false;
+  document.getElementById("requests-title").textContent =
+    role === "photographer" ? "Incoming requests" : "My requests";
+  const list = document.getElementById("requests-list");
+  if (!data.results || data.results.length === 0) {
+    list.innerHTML = '<p class="meta">No booking requests yet.</p>';
+    return;
+  }
+  list.innerHTML = data.results
+    .map((booking) => {
+      const other =
+        role === "photographer"
+          ? booking.customer_username
+          : booking.profile_studio_name || booking.profile_slug;
+      return `
+      <div class="request-row">
+        <div class="req-info">
+          <strong>${escapeHtml(booking.package_title)}</strong>
+          <span class="meta">${escapeHtml(other)} · ${new Date(
+            booking.date
+          ).toLocaleString()}</span>
+        </div>
+        ${statusChip(booking.status)}
+        ${
+          role === "photographer" && booking.status === "pending"
+            ? `
+        <button class="btn btn-sm" type="button" data-accept="${booking.id}">Accept</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-reject="${booking.id}">Reject</button>`
+            : ""
+        }
+      </div>`;
+    })
+    .join("");
+
+  if (role === "photographer") {
+    list.querySelectorAll("[data-accept]").forEach((button) => {
+      button.addEventListener("click", () =>
+        transitionBooking(button.dataset.accept, "accept")
+      );
+    });
+    list.querySelectorAll("[data-reject]").forEach((button) => {
+      button.addEventListener("click", () =>
+        transitionBooking(button.dataset.reject, "reject")
+      );
+    });
+  }
+}
+
+async function loadRequests(access, role) {
+  try {
+    const response = await fetch(`${API}/bookings/`, {
+      headers: { Authorization: `Bearer ${access}` },
+    });
+    if (response.ok) {
+      renderRequests(await response.json(), role);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function nextShootAction(status) {
+  if (status === "booked") {
+    return { label: "Start editing", next: "editing" };
+  }
+  if (status === "editing") {
+    return { label: "Mark delivered", next: "delivered" };
+  }
+  return null;
+}
+
+function renderShoots(data) {
+  document.getElementById("shoots-panel").hidden = false;
+  const list = document.getElementById("shoots-list");
+  if (!data.results || data.results.length === 0) {
+    list.innerHTML = '<p class="meta">No shoots yet.</p>';
+    return;
+  }
+  list.innerHTML = data.results
+    .map((shoot) => {
+      const action = nextShootAction(shoot.status);
+      return `
+      <div class="request-row">
+        <div class="req-info">
+          <strong>${escapeHtml(shoot.title)}</strong>
+          <span class="meta">${escapeHtml(shoot.client_name)} · ${new Date(
+            shoot.date
+          ).toLocaleString()}</span>
+        </div>
+        ${statusChip(shoot.status)}
+        ${
+          action
+            ? `<button class="btn btn-sm" type="button"
+                data-shoot="${shoot.id}" data-next="${action.next}">${action.label}</button>`
+            : ""
+        }
+      </div>`;
+    })
+    .join("");
+
+  list.querySelectorAll("[data-shoot]").forEach((button) => {
+    button.addEventListener("click", () =>
+      updateShoot(button.dataset.shoot, button.dataset.next)
+    );
+  });
+}
+
+async function loadShoots(access) {
+  try {
+    const response = await fetch(`${API}/shoots/`, {
+      headers: { Authorization: `Bearer ${access}` },
+    });
+    if (response.ok) {
+      renderShoots(await response.json());
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function updateShoot(id, nextStatus) {
+  if (
+    nextStatus === "delivered" &&
+    !confirm(
+      "Mark this shoot as delivered? The client will consider it final."
+    )
+  ) {
+    return;
+  }
+  const access = localStorage.getItem(STORAGE.access);
+  try {
+    const response = await fetch(`${API}/shoots/${id}/`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${access}`,
+      },
+      body: JSON.stringify({ status: nextStatus }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      let message = "Could not update the shoot.";
+      if (error && error.detail) {
+        message = Array.isArray(error.detail)
+          ? error.detail.join(" ")
+          : String(error.detail);
+      }
+      alert(message);
+      return;
+    }
+    await loadShoots(access);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function transitionBooking(id, action) {
+  const access = localStorage.getItem(STORAGE.access);
+  try {
+    const response = await fetch(`${API}/bookings/${id}/${action}/`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${access}` },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      let message = `Could not ${action} the request.`;
+      if (error && error.detail) {
+        message = Array.isArray(error.detail)
+          ? error.detail.join(" ")
+          : String(error.detail);
+      }
+      alert(message);
+      return;
+    }
+    await loadRequests(access, myRole);
+    await loadNotifications(access);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 async function init() {
   const access = localStorage.getItem(STORAGE.access);
   if (!access) {
@@ -124,11 +317,16 @@ async function init() {
     }
 
     const me = await response.json();
+    myRole = me.role;
     renderMe(me);
     showDash(me.username);
     dashStatus.hidden = true;
     dashContent.hidden = false;
     await loadNotifications(access);
+    await loadRequests(access, me.role);
+    if (me.role === "photographer") {
+      await loadShoots(access);
+    }
   } catch (error) {
     console.error(error);
     dashStatus.hidden = false;

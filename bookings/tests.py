@@ -655,3 +655,51 @@ class BookingStatusAuditTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.pending_booking.refresh_from_db()
         self.assertEqual(self.pending_booking.status, "pending")
+
+
+class BookingNotificationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.customer = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.ana_profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+            is_published=True,
+        )
+        cls.package = Package.objects.create(
+            profile=cls.ana_profile,
+            title="Boda completa",
+            price=200,
+        )
+
+    def test_photographer_is_notified_on_new_booking(self):
+        from notifications.models import Notification
+
+        api = APIClient()
+        api.force_authenticate(self.customer)
+        response = api.post(
+            "/api/bookings/",
+            {
+                "package": self.package.pk,
+                "date": "2026-12-15T15:00:00Z",
+                "message": "I want to book",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        notification = Notification.objects.get(user=self.ana)
+        self.assertEqual(notification.title, "New booking request")
+        self.assertIn("maria", notification.message)
+        self.assertIn("Boda completa", notification.message)

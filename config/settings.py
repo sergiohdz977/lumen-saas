@@ -66,6 +66,11 @@ CORS_ALLOWED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+# VS Code's built-in browser / Live Preview runs on a random port,
+# so any localhost/127.0.0.1 origin is accepted in DEBUG.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+]
 
 
 # Application definition

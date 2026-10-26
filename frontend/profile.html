@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lumen — Photographer</title>
-  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/styles.css?v=2" />
 </head>
 <body>
   <header class="site-header">
@@ -64,6 +64,33 @@
     </div>
   </footer>
 
-  <script src="js/profile.js"></script>
+  <div id="book-modal" class="modal" hidden>
+    <div class="modal-panel">
+      <button id="book-close" class="modal-close" type="button" aria-label="Close">&times;</button>
+      <h2>Book a session</h2>
+      <p class="modal-sub" id="book-package"></p>
+      <form id="book-form">
+        <label for="book-date">Date and time</label>
+        <input id="book-date" type="datetime-local" required />
+        <label for="book-message">Message (optional)</label>
+        <textarea id="book-message" rows="3" placeholder="Tell the photographer what you have in mind…"></textarea>
+        <p id="book-error" class="form-error" hidden></p>
+        <button class="btn btn-block" type="submit">Send request</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lb-btn lb-close" id="lb-close" aria-label="Close">✕</button>
+    <button class="lb-btn lb-prev" id="lb-prev" aria-label="Previous photo">‹</button>
+    <figure class="lb-stage">
+      <img id="lb-img" alt="" />
+      <figcaption class="lb-caption" id="lb-caption"></figcaption>
+    </figure>
+    <button class="lb-btn lb-next" id="lb-next" aria-label="Next photo">›</button>
+    <span class="lb-counter" id="lb-counter"></span>
+  </div>
+
+  <script src="js/profile.js?v=2"></script>
 </body>
 </html>

@@ -37,7 +37,13 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
         return qs.filter(package__profile__user=user)
 
     def perform_create(self, serializer):
-        serializer.save(customer=self.request.user)
+        booking = serializer.save(customer=self.request.user)
+        notify(
+            booking.package.profile.user,
+            "New booking request",
+            f'"{booking.customer.username}" wants to book '
+            f'"{booking.package.title}" for {booking.date:%d/%m/%Y}',
+        )
 
     @action(detail=True, methods=["post"])
     def accept(self, request, pk=None):

@@ -96,10 +96,41 @@ suite after each step.
   rewritten (features, quick start, API docs, full endpoint reference);
   this changelog reorganized by phase (254)
 
+## Frontend — web app (vanilla HTML/CSS/JS)
+
+- `frontend/`: index (public catalog, pagination, login/register modal),
+  profile page (hero, packages, portfolio + lightbox, booking modal),
+  dashboard (account, notifications, booking requests, shoots); no build
+  step, served by Django itself
+- `config/urls.py`: `page()` views for `/`, `/dashboard`, `/profile` and the
+  `frontend_asset` route (`css|js|img/...`) with `Cache-Control: no-store`;
+  asset cache-busting via `?v=2`
+- CORS: allow any `localhost`/`127.0.0.1` port (`CORS_ALLOWED_ORIGIN_REGEXES`)
+  so the frontend works from VS Code's preview or `runserver`
+- Booking flow end to end: profile → "Book session" modal →
+  `POST /api/bookings/` → toast + "Request sent ✓"; `IsCustomer` enforced
+  client-side too
+- Booking creation now notifies the photographer (`New booking request`) +
+  `BookingNotificationTests`
+- Dashboard: role-aware request lists (`profile_studio_name` on the booking
+  serializer), Accept/Reject, shoots panel with `booked → editing → delivered`
+  (confirm before "Mark delivered") and `client_name`/`client_email` on the
+  shoot serializer
+- `profiles/management/commands/seed_demo.py`: idempotent demo seed (4
+  photographer profiles, 13 packages/photos, customer `sofia.reyes`,
+  password `DemoLumen2026`)
+- Portfolio placeholders: 13 wallpaper images resized 13.1 MB → 0.5 MB
+  (960px, q78)
+- `frontend/AGENTS.md` updated: English UI, Stripe as current provider,
+  Cloudinary for storage, structure includes `notifications`/`reviews`/
+  `frontend`/`docs` (257)
+
 ## Next
 
 - Live deploy: create the Railway project and follow `docs/DEPLOY.md` (user)
 - Step 19 — restore Docker (`git revert aa9defd`) before/with the final deploy
+- Gallery/reviews UI on the web frontend
+- Cloudinary for real photo uploads from the dashboard
 - Post-roadmap backlog: real SMTP provider for production emails, CI with
-  GitHub Actions, frontend (Swagger ready at `/api/docs/`), usage endpoint
-  (galleries/photos quota), Stripe billing portal, Sentry
+  GitHub Actions, usage endpoint (galleries/photos quota), Stripe billing
+  portal, Sentry

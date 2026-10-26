@@ -3,10 +3,25 @@ from .models import Shoot
 
 
 class ShootSerializer(serializers.ModelSerializer):
+    client_name = serializers.CharField(source="client.name", read_only=True)
+    client_email = serializers.EmailField(
+        source="client.email", read_only=True, allow_blank=True
+    )
+
     class Meta:
         model = Shoot
-        fields = ["id", "client", "title", "shoot_type", "date", "status", "created_at"]
-        read_only_fields = ["id", "created_at"]
+        fields = [
+            "id",
+            "client",
+            "client_name",
+            "client_email",
+            "title",
+            "shoot_type",
+            "date",
+            "status",
+            "created_at",
+        ]
+        read_only_fields = ["id", "client_name", "client_email", "created_at"]
 
     def validate_client(self, value):
         request = self.context["request"]

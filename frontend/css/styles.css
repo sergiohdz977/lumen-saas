@@ -572,3 +572,191 @@ nav a:hover {
   font-size: 0.8rem;
   padding: 10px 12px;
 }
+
+.portfolio-grid .photo-card img {
+  cursor: zoom-in;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(14, 11, 9, 0.94);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox[hidden] {
+  display: none;
+}
+
+.lb-stage {
+  margin: 0;
+  max-width: min(94vw, 1400px);
+  text-align: center;
+}
+
+.lb-stage img {
+  max-width: 92vw;
+  max-height: 76vh;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+
+.lb-caption {
+  color: #f5efe6;
+  font-size: 0.95rem;
+  margin-top: 14px;
+}
+
+.lb-btn {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.lb-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.lb-close {
+  top: 18px;
+  right: 18px;
+}
+
+.lb-prev {
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.lb-next {
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.lb-counter {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 0.82rem;
+}
+
+.pkg-book {
+  margin-top: 12px;
+}
+
+.modal-panel textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  background: var(--bg);
+  color: inherit;
+  resize: vertical;
+  margin-bottom: 14px;
+}
+
+.request-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.request-row:first-child {
+  border-top: 0;
+}
+
+.req-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 180px;
+}
+
+.status-chip {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.status-pending {
+  background: #f6e7c1;
+  color: #8a6d1a;
+}
+
+.status-accepted {
+  background: #d7efd9;
+  color: #1f6b34;
+}
+
+.status-rejected {
+  background: #f6d7d7;
+  color: #9b2c2c;
+}
+
+.status-booked {
+  background: #dbe7f6;
+  color: #1f4e8a;
+}
+
+.status-editing {
+  background: #f6e7c1;
+  color: #8a6d1a;
+}
+
+.status-delivered {
+  background: #d7efd9;
+  color: #1f6b34;
+}
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink, #2a241e);
+  color: #fdf8f0;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  z-index: 1100;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.toast[hidden] {
+  display: none;
+}

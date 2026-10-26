@@ -12,6 +12,9 @@ class BookingRequestSerializer(serializers.ModelSerializer):
     profile_slug = serializers.CharField(
         source="package.profile.slug", read_only=True
     )
+    profile_studio_name = serializers.CharField(
+        source="package.profile.studio_name", read_only=True, allow_blank=True
+    )
 
     class Meta:
         model = BookingRequest
@@ -21,6 +24,7 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "package",
             "package_title",
             "profile_slug",
+            "profile_studio_name",
             "date",
             "message",
             "status",
@@ -31,6 +35,7 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "customer_username",
             "package_title",
             "profile_slug",
+            "profile_studio_name",
             "status",
             "created_at",
         ]

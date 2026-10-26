@@ -1,4 +1,7 @@
-const API = "http://127.0.0.1:8000/api";
+const API =
+  window.location.port === "8000" || window.location.port === ""
+    ? "/api"
+    : "http://127.0.0.1:8000/api";
 
 const STORAGE = {
   access: "lumen_access",
@@ -15,6 +18,21 @@ const btnLogin = document.getElementById("btn-login");
 const btnLogout = document.getElementById("btn-logout");
 const authUser = document.getElementById("auth-user");
 const authUsername = document.getElementById("auth-username");
+const lightbox = document.getElementById("lightbox");
+const lbImg = document.getElementById("lb-img");
+const lbCaption = document.getElementById("lb-caption");
+const lbCounter = document.getElementById("lb-counter");
+const portfolioGrid = document.getElementById("portfolio-grid");
+const bookModal = document.getElementById("book-modal");
+const bookForm = document.getElementById("book-form");
+const bookPackage = document.getElementById("book-package");
+const bookDate = document.getElementById("book-date");
+const bookMessage = document.getElementById("book-message");
+const bookError = document.getElementById("book-error");
+
+let portfolioPhotos = [];
+let lbIndex = 0;
+let myRole = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -94,6 +112,9 @@ async function loadPackages() {
           pkg.description || "Session details on request."
         )}</p>
         <div class="pkg-price">$${Number(pkg.price).toFixed(2)}</div>
+        <button class="btn btn-block pkg-book" type="button"
+          data-package-id="${pkg.id}"
+          data-title="${escapeHtml(pkg.title)}">Book session</button>
       </div>`
       )
       .join("");
@@ -116,10 +137,11 @@ async function loadPortfolio() {
     if (items.length === 0) {
       return;
     }
-    document.getElementById("portfolio-grid").innerHTML = items
+    portfolioPhotos = items;
+    portfolioGrid.innerHTML = items
       .map(
-        (photo) => `
-      <figure class="photo-card">
+        (photo, index) => `
+      <figure class="photo-card" data-index="${index}">
         <img src="${escapeHtml(photo.image)}" alt="${escapeHtml(
           photo.caption || "Portfolio photo"
         )}" loading="lazy" />
@@ -173,5 +195,211 @@ btnLogout.addEventListener("click", () => {
   initSession();
 });
 
+function renderLightbox() {
+  const photo = portfolioPhotos[lbIndex];
+  lbImg.src = photo.image;
+  lbImg.alt = photo.caption || "Portfolio photo";
+  lbCaption.textContent = photo.caption || "";
+  lbCounter.textContent = `${lbIndex + 1} / ${portfolioPhotos.length}`;
+}
+
+function openLightbox(index) {
+  if (portfolioPhotos.length === 0) {
+    return;
+  }
+  lbIndex = index;
+  renderLightbox();
+  lightbox.hidden = false;
+  document.body.style.overflow = "hidden";
+  document.getElementById("lb-close").focus();
+}
+
+function closeLightbox() {
+  lightbox.hidden = true;
+  document.body.style.overflow = "";
+}
+
+function stepLightbox(delta) {
+  lbIndex = (lbIndex + delta + portfolioPhotos.length) % portfolioPhotos.length;
+  renderLightbox();
+}
+
+portfolioGrid.addEventListener("click", (event) => {
+  const card = event.target.closest(".photo-card");
+  if (!card) {
+    return;
+  }
+  openLightbox(Number(card.dataset.index) || 0);
+});
+document.getElementById("lb-close").addEventListener("click", closeLightbox);
+document
+  .getElementById("lb-prev")
+  .addEventListener("click", () => stepLightbox(-1));
+document
+  .getElementById("lb-next")
+  .addEventListener("click", () => stepLightbox(1));
+lightbox.addEventListener("click", (event) => {
+  if (event.target === lightbox) {
+    closeLightbox();
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (lightbox.hidden) {
+    return;
+  }
+  if (event.key === "Escape") {
+    closeLightbox();
+  } else if (event.key === "ArrowRight") {
+    stepLightbox(1);
+  } else if (event.key === "ArrowLeft") {
+    stepLightbox(-1);
+  }
+});
+
+function showToast(message) {
+  let toast = document.getElementById("toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "toast";
+    toast.className = "toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.hidden = false;
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => {
+    toast.hidden = true;
+  }, 4000);
+}
+
+function openBookModal(packageId, title) {
+  bookForm.dataset.packageId = packageId;
+  bookPackage.textContent = title;
+  bookError.hidden = true;
+  bookForm.reset();
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  bookDate.min = now.toISOString().slice(0, 16);
+  bookModal.hidden = false;
+  bookDate.focus();
+}
+
+function closeBookModal() {
+  bookModal.hidden = true;
+}
+
+async function loadMeRole() {
+  const access = localStorage.getItem(STORAGE.access);
+  if (!access) {
+    return;
+  }
+  try {
+    const response = await fetch(`${API}/auth/me/`, {
+      headers: { Authorization: `Bearer ${access}` },
+    });
+    if (response.status === 401) {
+      localStorage.removeItem(STORAGE.access);
+      localStorage.removeItem(STORAGE.refresh);
+      localStorage.removeItem(STORAGE.username);
+      initSession();
+      return;
+    }
+    if (response.ok) {
+      const me = await response.json();
+      myRole = me.role;
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function handleBookSubmit(event) {
+  event.preventDefault();
+  bookError.hidden = true;
+  const access = localStorage.getItem(STORAGE.access);
+  if (!access) {
+    window.location.href = "index.html?login=1";
+    return;
+  }
+  if (myRole && myRole !== "customer") {
+    bookError.textContent =
+      "Only customer accounts can send booking requests.";
+    bookError.hidden = false;
+    return;
+  }
+  const packageId = Number(bookForm.dataset.packageId);
+  if (!bookDate.value) {
+    bookError.textContent = "Please choose a date and time.";
+    bookError.hidden = false;
+    return;
+  }
+  try {
+    const response = await fetch(`${API}/bookings/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${access}`,
+      },
+      body: JSON.stringify({
+        package: packageId,
+        date: bookDate.value,
+        message: bookMessage.value.trim(),
+      }),
+    });
+    if (response.status === 401) {
+      closeBookModal();
+      window.location.href = "index.html?login=1";
+      return;
+    }
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      let message = `Server error (HTTP ${response.status}).`;
+      if (error) {
+        const raw = error.detail || Object.values(error)[0];
+        if (Array.isArray(raw)) {
+          message = raw.join(" ");
+        } else if (raw) {
+          message = String(raw);
+        }
+      }
+      bookError.textContent = message;
+      bookError.hidden = false;
+      return;
+    }
+    closeBookModal();
+    const button = document.querySelector(
+      `.pkg-book[data-package-id="${bookForm.dataset.packageId}"]`
+    );
+    if (button) {
+      button.textContent = "Request sent ✓";
+      button.disabled = true;
+    }
+    showToast(
+      "Request sent! Track it in your dashboard under \u201cMy requests\u201d."
+    );
+  } catch (error) {
+    console.error(error);
+    bookError.textContent =
+      "Could not reach the API. Check that the server is running on port 8000.";
+    bookError.hidden = false;
+  }
+}
+
+document.getElementById("packages-grid").addEventListener("click", (event) => {
+  const button = event.target.closest(".pkg-book");
+  if (!button) {
+    return;
+  }
+  openBookModal(button.dataset.packageId, button.dataset.title);
+});
+document.getElementById("book-close").addEventListener("click", closeBookModal);
+bookModal.addEventListener("click", (event) => {
+  if (event.target === bookModal) {
+    closeBookModal();
+  }
+});
+bookForm.addEventListener("submit", handleBookSubmit);
+
 initSession();
 loadProfile();
+loadMeRole();

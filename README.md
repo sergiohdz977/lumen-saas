@@ -1,14 +1,20 @@
 # Lumen
 
-A SaaS backend for photographers: marketplace, bookings, private galleries,
+A SaaS for photographers: marketplace, bookings, private galleries,
 reviews, real-time notifications and Stripe payments — with a free tier and a
-Pro subscription for photographers.
+Pro subscription for photographers. Django REST backend plus a vanilla
+HTML/CSS/JS web frontend served by the same server.
 
-**Status**: backend complete (roadmap phases 1-4), **254 tests passing**,
-ready to deploy ([docs/DEPLOY.md](docs/DEPLOY.md)).
+**Status**: backend complete (roadmap phases 1-4) + web frontend (catalog,
+profile, booking flow, dashboard), **257 tests passing**, local demo via
+`arrancar-demo.bat`.
 
 ## Features
 
+- Web frontend (no build step): public catalog with pagination, profile page
+  with packages/portfolio/lightbox, booking modal, private dashboard with
+  notifications, booking requests (accept/reject) and shoots
+  (booked → editing → delivered)
 - JWT auth with two roles: `photographer` and `customer`
 - Marketplace: searchable profiles (`?city=`, `?specialty=`), packages and
   portfolios, paginated
@@ -36,8 +42,13 @@ python -m venv venv
 venv\Scripts\python -m pip install -r requirements.txt
 copy .env.example .env            # Windows (cp .env.example .env on Linux)
 python manage.py migrate
+python manage.py seed_demo      # demo accounts, packages and photos
 python manage.py runserver
 ```
+
+Demo accounts (password `DemoLumen2026`): `demofoto` (photographer),
+`sofia.reyes` (customer). Open <http://127.0.0.1:8000/> for the web app
+(`arrancar-demo.bat` starts Daphne + Celery with one double-click).
 
 Background tasks (thumbnails and emails) need Redis/Memurai running and a
 Celery worker in a second terminal (Windows requires the `solo` pool):
@@ -171,7 +182,7 @@ venv\Scripts\python.exe manage.py test
 ```
 
 Fully isolated: temporary media folder, eager Celery, in-memory channel layer,
-no network (no Redis, Cloudinary or Stripe needed). **254 tests** covering
+no network (no Redis, Cloudinary or Stripe needed). **257 tests** covering
 permissions, business rules, uploads, webhooks and plan limits.
 
 ## Database
@@ -210,12 +221,13 @@ config/        settings, urls, ASGI (WebSockets), Celery app
 users/         custom User (roles), JWT auth
 clients/       customer records per photographer
 shoots/        shoot lifecycle (booked → editing → delivered)
-profiles/      photographer profile, packages, portfolio
+profiles/      photographer profile, packages, portfolio, seed_demo
 bookings/      booking requests and accept/reject flow
 galleries/     private galleries, photos, favorites, share links
 reviews/       1-5 ratings between customers and photographers
 notifications/ REST history + WebSocket push
 payments/      Stripe deposits, Connect onboarding, Pro subscriptions
+frontend/      web app: index, profile, dashboard (vanilla HTML/CSS/JS)
 docs/          DEPLOY.md, CHANGELOG.md, api-schema.yml
 ```
 

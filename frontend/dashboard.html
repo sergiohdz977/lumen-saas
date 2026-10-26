@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lumen — Dashboard</title>
-  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/styles.css?v=2" />
 </head>
 <body>
   <header class="site-header">
@@ -64,6 +64,20 @@
             <p class="meta">No notifications yet.</p>
           </div>
         </div>
+
+        <div class="panel panel-wide" id="requests-panel" hidden>
+          <h2 id="requests-title">Booking requests</h2>
+          <div id="requests-list">
+            <p class="meta">No booking requests yet.</p>
+          </div>
+        </div>
+
+        <div class="panel panel-wide" id="shoots-panel" hidden>
+          <h2>Shoots</h2>
+          <div id="shoots-list">
+            <p class="meta">No shoots yet.</p>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -74,6 +88,6 @@
     </div>
   </footer>
 
-  <script src="js/dashboard.js"></script>
+  <script src="js/dashboard.js?v=2"></script>
 </body>
 </html>
