@@ -93,3 +93,8 @@ def construct_webhook_event(payload, signature):
     return stripe.Webhook.construct_event(
         payload, signature, settings.STRIPE_WEBHOOK_SECRET
     )
+
+
+def retrieve_checkout_session(session_id):
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    return stripe.checkout.Session.retrieve(session_id)

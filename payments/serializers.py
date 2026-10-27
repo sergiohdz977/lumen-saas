@@ -11,6 +11,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "booking",
+            "kind",
             "customer",
             "photographer",
             "amount_cents",
@@ -25,4 +26,9 @@ class PaymentSerializer(serializers.ModelSerializer):
 class CheckoutSerializer(serializers.Serializer):
     booking = serializers.PrimaryKeyRelatedField(
         queryset=BookingRequest.objects.all()
+    )
+    kind = serializers.ChoiceField(
+        choices=Payment.Kind.choices,
+        default=Payment.Kind.DEPOSIT,
+        required=False,
     )

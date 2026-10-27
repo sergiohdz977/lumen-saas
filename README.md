@@ -5,16 +5,18 @@ reviews, real-time notifications and Stripe payments — with a free tier and a
 Pro subscription for photographers. Django REST backend plus a vanilla
 HTML/CSS/JS web frontend served by the same server.
 
-**Status**: backend complete (roadmap phases 1-4) + web frontend (catalog,
-profile, booking flow, dashboard), **257 tests passing**, local demo via
-`arrancar-demo.bat`.
+**Status**: backend complete (roadmap phases 1-4) + complete web frontend
+(catalog, profile with reviews, booking flow, role dashboard, galleries,
+payments), **322 tests passing**, local demo via `arrancar-demo.bat`.
 
 ## Features
 
-- Web frontend (no build step): public catalog with pagination, profile page
-  with packages/portfolio/lightbox, booking modal, private dashboard with
-  notifications, booking requests (accept/reject) and shoots
-  (booked → editing → delivered)
+- Web frontend (no build step): registration with role picker, catalog with
+  city/specialty search, profile page with packages/portfolio/lightbox/
+  reviews, booking modal, private dashboard with notifications, requests
+  (accept/reject + deposit checkout), shoots (booked → editing → delivered),
+  catalog CRUD, studio settings, galleries with uploads and share links,
+  favorites and payment history
 - JWT auth with two roles: `photographer` and `customer`
 - Marketplace: searchable profiles (`?city=`, `?specialty=`), packages and
   portfolios, paginated
@@ -88,7 +90,8 @@ Public endpoints (no auth required).
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/profiles/` | List published profiles (filters: `?city=`, `?specialty=`) |
-| GET | `/api/profiles/{slug}/` | Profile detail (includes `plan`: free/pro) |
+| GET | `/api/profiles/{slug}/` | Profile detail (includes `plan`, `is_published`, `user_id`) |
+| PATCH | `/api/profiles/{slug}/` | Photographer edits **own** profile (studio, bio, city, specialties, phone, `is_published`; create/delete not allowed) |
 | GET | `/api/packages/` | List packages (filter: `?profile={slug}`) |
 | GET | `/api/packages/{id}/` | Package detail |
 | GET | `/api/portfolio-photos/` | List portfolio photos |
@@ -141,7 +144,7 @@ pushes; the rows are always saved even without it.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/notifications/` | The logged-in user's own notifications (paginated) |
+| GET | `/api/notifications/` | The logged-in user's own notifications (paginated; `?unread=1` for unread only) |
 | POST | `/api/notifications/{id}/read/` | Mark one as read |
 | POST | `/api/notifications/read-all/` | Mark all as read |
 | WS | `/ws/notifications/?token={ACCESS}` | Open line; server pushes new notifications as they happen (session login also works) |
@@ -182,7 +185,7 @@ venv\Scripts\python.exe manage.py test
 ```
 
 Fully isolated: temporary media folder, eager Celery, in-memory channel layer,
-no network (no Redis, Cloudinary or Stripe needed). **257 tests** covering
+no network (no Redis, Cloudinary or Stripe needed). **322 tests** covering
 permissions, business rules, uploads, webhooks and plan limits.
 
 ## Database

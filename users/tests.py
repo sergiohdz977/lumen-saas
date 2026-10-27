@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from .models import User
 from .permissions import IsPhotographer
+from profiles.models import PhotographerProfile
 
 
 class PhotographerOnlyView(APIView):
@@ -149,6 +150,78 @@ class RegisterEndpointTests(TestCase):
         }
         response = self.api.post("/api/auth/register/", payload, format="json")
         self.assertNotIn("password", response.data)
+
+    def test_register_photographer_creates_unpublished_profile(self):
+        payload = {
+            "username": "nuevafoto2",
+            "email": "nuevafoto2@test.com",
+            "password": "secret123",
+            "role": "photographer",
+        }
+        response = self.api.post("/api/auth/register/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        profile = PhotographerProfile.objects.get(user__username="nuevafoto2")
+        self.assertFalse(profile.is_published)
+        self.assertTrue(profile.slug)
+        self.assertEqual(profile.studio_name, "nuevafoto2")
+
+    def test_register_customer_does_not_create_profile(self):
+        payload = {
+            "username": "nuevocliente2",
+            "email": "nuevocliente2@test.com",
+            "password": "secret123",
+        }
+        response = self.api.post("/api/auth/register/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(
+            PhotographerProfile.objects.filter(user__username="nuevocliente2").exists()
+        )
+
+    def test_new_photographer_me_returns_profile(self):
+        self.api.post(
+            "/api/auth/register/",
+            {
+                "username": "nuevafoto3",
+                "email": "nuevafoto3@test.com",
+                "password": "secret123",
+                "role": "photographer",
+            },
+            format="json",
+        )
+        login = self.api.post(
+            "/api/auth/login/",
+            {"username": "nuevafoto3", "password": "secret123"},
+            format="json",
+        )
+        self.api.credentials(HTTP_AUTHORIZATION="Bearer " + login.data["access"])
+        response = self.api.get("/api/auth/me/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["profile"]["slug"])
+        self.assertFalse(response.data["profile"]["is_published"])
+        self.assertEqual(response.data["profile"]["studio_name"], "nuevafoto3")
+        self.assertFalse(response.data["profile"]["stripe_connected"])
+
+    def test_me_profile_reports_stripe_connected(self):
+        user = User.objects.create_user(
+            username="stripejane",
+            email="stripejane@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        PhotographerProfile.objects.create(
+            user=user, studio_name="Jane Studio", stripe_account_id="acct_123"
+        )
+        login = self.api.post(
+            "/api/auth/login/",
+            {"username": "stripejane", "password": "secret123"},
+            format="json",
+        )
+        self.api.credentials(
+            HTTP_AUTHORIZATION="Bearer " + login.data["access"]
+        )
+        response = self.api.get("/api/auth/me/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["profile"]["stripe_connected"])
 
 
 class LoginAndRefreshTests(TestCase):

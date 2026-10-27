@@ -1,19 +1,31 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lumen — Dashboard</title>
-  <link rel="stylesheet" href="css/styles.css?v=2" />
+  <link rel="stylesheet" href="css/styles.css?v=14" />
 </head>
 <body>
   <header class="site-header">
     <div class="container header-inner">
       <a class="logo" href="index.html">Lumen<span class="logo-dot">.</span></a>
       <nav class="nav">
-        <a href="index.html#photographers">Photographers</a>
+        <a href="index.html#photographers" data-nav-photos>Photographers</a>
+        <a href="index.html" data-nav-public hidden>Public site</a>
         <a href="dashboard.html" aria-current="page">Dashboard</a>
-        <span id="auth-area">
+        <span id="bell-area" class="bell-area" hidden>
+          <button id="btn-bell" class="bell-btn" type="button" aria-label="Notifications" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span id="bell-badge" class="bell-badge" hidden>0</span>
+          </button>
+          <div id="bell-panel" class="bell-panel" hidden>
+            <div id="bell-list" class="bell-list"></div>
+            <a class="bell-all" href="dashboard.html?tab=notifications">View all notifications</a>
+          </div>
+        </span>
+                <span id="auth-area">
+          <button id="btn-signup" class="btn btn-ghost" hidden>Sign up</button>
           <button id="btn-login" class="btn btn-ghost">Log in</button>
           <span id="auth-user" hidden>
             <span class="auth-greeting">
@@ -29,7 +41,7 @@
   <main class="container">
     <section id="gate" class="gate" hidden>
       <h1>Log in first</h1>
-      <p class="hero-sub">This page is private. Sign in to see your studio, plan and notifications.</p>
+      <p class="hero-sub">This page is private. Sign in to see your studio, bookings and notifications.</p>
       <button id="btn-go-login" class="btn">Go to log in</button>
     </section>
 
@@ -41,43 +53,159 @@
 
       <p id="dash-status" class="status">Loading your dashboard…</p>
 
-      <div id="dash-content" class="dash-grid" hidden>
-        <div class="panel">
-          <h2>Account</h2>
-          <div class="kv"><span>Username</span><strong id="me-username"></strong></div>
-          <div class="kv"><span>Email</span><strong id="me-email"></strong></div>
-          <div class="kv"><span>Role</span><span class="tag" id="me-role"></span></div>
-        </div>
-
-        <div class="panel" id="profile-panel" hidden>
-          <h2>Studio</h2>
-          <div class="kv"><span>Studio</span><strong id="me-studio"></strong></div>
-          <div class="kv"><span>City</span><strong id="me-city"></strong></div>
-          <div class="kv"><span>Plan</span><span class="tag" id="me-plan"></span></div>
-          <div class="kv"><span>Published</span><strong id="me-published"></strong></div>
-          <div class="chips" id="me-chips" style="margin-top:12px"></div>
-        </div>
-
-        <div class="panel panel-wide">
-          <h2>Notifications <span class="tag" id="notif-count">0</span></h2>
-          <div id="notif-list">
-            <p class="meta">No notifications yet.</p>
+      <div id="dash-content" hidden>
+        <div id="stripe-alert" class="stripe-alert" hidden>
+          <span class="stripe-alert-icon" aria-hidden="true">⚠</span>
+          <div class="stripe-alert-body">
+            <strong>Attention!</strong>
+            <p>You have a booking waiting for payment, but you cannot receive the money until you connect Stripe.</p>
           </div>
+          <button class="btn" id="stripe-alert-action" type="button">Click here</button>
+        </div>
+        <div class="tabs" id="dash-tabs" role="tablist">
+          <button class="tab is-active" type="button" data-tab="overview">Overview</button>
+          <button class="tab" type="button" data-tab="notifications">Notifications <span class="tag" id="notif-count">0</span></button>
+          <button class="tab" type="button" data-tab="requests">Requests</button>
+          <button class="tab" type="button" data-tab="shoots" data-roles="photographer" hidden>Shoots</button>
+          <button class="tab" type="button" data-tab="catalog" data-roles="photographer" hidden>Catalog</button>
+          <button class="tab" type="button" data-tab="studio" data-roles="photographer" hidden>Studio profile</button>
+          <button class="tab" type="button" data-tab="clients" data-roles="photographer" hidden>Clients</button>
+          <button class="tab" type="button" data-tab="galleries">Galleries</button>
+          <button class="tab" type="button" data-tab="favorites" data-roles="customer" hidden>Favorites</button>
+          <button class="tab" type="button" data-tab="reviews" data-roles="customer" hidden>My reviews</button>
+          <button class="tab" type="button" data-tab="payments">Payments</button>
+          <button class="tab" type="button" data-tab="profile">Settings</button>
         </div>
 
-        <div class="panel panel-wide" id="requests-panel" hidden>
-          <h2 id="requests-title">Booking requests</h2>
-          <div id="requests-list">
-            <p class="meta">No booking requests yet.</p>
+        <section class="panel tab-panel" data-panel="overview">
+          <div id="overview-cards" class="ov-grid"></div>
+        </section>
+
+        <section class="panel tab-panel" data-panel="profile" hidden>
+          <div class="panel-head">
+            <h2>Settings</h2>
+            <a class="btn btn-ghost btn-sm" id="btn-view-public" href="#" target="_blank" rel="noopener" hidden>View my public profile</a>
           </div>
-        </div>
 
-        <div class="panel panel-wide" id="shoots-panel" hidden>
+          <div id="profile-studio" class="settings-section" hidden>
+            <h3>Public Profile</h3>
+            <div class="kv"><span>Studio</span><strong id="me-studio"></strong></div>
+            <div class="kv"><span>City</span><strong id="me-city"></strong></div>
+            <div class="kv"><span>Published</span><strong id="me-published"></strong></div>
+            <div class="chips" id="me-chips" style="margin-top:12px"></div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Account Details</h3>
+            <table class="settings-table">
+              <tbody>
+                <tr><th>Email</th><td id="me-email"></td></tr>
+                <tr><th>Username</th><td id="me-username"></td></tr>
+                <tr><th>Role</th><td><span class="tag" id="me-role"></span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="billing-section" class="settings-section" hidden>
+            <h3>Billing</h3>
+            <div class="kv"><span>Plan</span><span class="tag" id="me-plan"></span></div>
+            <div class="kv"><span>Stripe</span><strong id="me-stripe"></strong></div>
+            <button class="btn btn-sm" id="btn-connect-stripe" type="button" hidden>Connect Stripe</button>
+            <div id="pro-upgrade">
+              <p class="meta">Free allows 3 galleries and 100 photos. Pro is unlimited.</p>
+              <button class="btn btn-sm" id="btn-upgrade" type="button">Upgrade to Pro</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel tab-panel" data-panel="notifications" hidden>
+          <div class="panel-head">
+            <h2>Notifications</h2>
+            <button class="btn btn-ghost btn-sm" id="notif-read-all" type="button">Mark all as read</button>
+          </div>
+          <div id="notif-list"><p class="meta">No notifications yet.</p></div>
+        </section>
+
+        <section class="panel tab-panel" data-panel="requests" hidden>
+          <div class="panel-head"><h2 id="requests-title">Booking requests</h2></div>
+          <div id="requests-list"><p class="meta">No booking requests yet.</p></div>
+        </section>
+
+        <section class="panel tab-panel" data-panel="shoots" data-roles="photographer" hidden>
           <h2>Shoots</h2>
-          <div id="shoots-list">
-            <p class="meta">No shoots yet.</p>
+          <div id="shoots-list"><p class="meta">No shoots yet.</p></div>
+        </section>
+
+        <section class="panel tab-panel" data-panel="catalog" data-roles="photographer" hidden>
+          <div class="panel-head">
+            <h2>Catalog</h2>
+            <span class="panel-actions">
+              <button class="btn btn-sm" id="btn-add-package" type="button">Add package</button>
+              <button class="btn btn-ghost btn-sm" id="btn-add-photo" type="button">Add portfolio photo</button>
+            </span>
           </div>
-        </div>
+          <p class="meta">Packages and portfolio shown on your public profile.</p>
+          <div id="pkg-list"><p class="meta">No packages yet.</p></div>
+          <h3 class="sub-title">Portfolio</h3>
+          <div class="photo-strip" id="portfolio-list"><p class="meta">No photos yet.</p></div>
+        </section>
+
+        <section class="panel tab-panel" data-panel="studio" data-roles="photographer" hidden>
+          <div class="panel-head">
+            <h2>Studio profile</h2>
+            <a class="btn btn-ghost btn-sm" id="studio-view-link" href="#" target="_blank" rel="noopener" hidden>View public page</a>
+          </div>
+          <form id="studio-form" class="form-grid">
+            <label for="st-studio">Studio name</label>
+            <input id="st-studio" name="studio_name" maxlength="120" />
+            <label for="st-city">City</label>
+            <input id="st-city" name="city" maxlength="100" />
+            <label for="st-specialties">Specialties</label>
+            <input id="st-specialties" name="specialties" maxlength="200" placeholder="weddings, portraits" />
+            <label for="st-phone">Phone</label>
+            <input id="st-phone" name="phone" maxlength="30" />
+            <label for="st-bio">Bio</label>
+            <textarea id="st-bio" name="bio" rows="4"></textarea>
+            <label class="check-row" for="st-published">
+              <input id="st-published" name="is_published" type="checkbox" />
+              Published — visible in the marketplace
+            </label>
+            <p id="studio-error" class="form-error" hidden></p>
+            <div class="form-actions">
+              <button class="btn" type="submit">Save profile</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel tab-panel" data-panel="clients" data-roles="photographer" hidden>
+          <h2>Clients</h2>
+          <div id="clients-list"><p class="meta">No clients yet — they appear when you accept a booking.</p></div>
+        </section>
+
+        <section class="panel tab-panel" data-panel="galleries" hidden>
+          <div class="panel-head">
+            <h2>Galleries</h2>
+            <button id="btn-new-gallery" class="btn btn-sm" type="button" hidden>Create gallery</button>
+          </div>
+          <div id="galleries-list"><p class="meta">No galleries yet.</p></div>
+        </section>
+
+        <section class="panel tab-panel" data-panel="favorites" data-roles="customer" hidden>
+          <h2>Favorites</h2>
+          <div id="favorites-list"><p class="meta">No favorites yet — tap the star on your gallery photos.</p></div>
+        </section>
+
+        <section class="panel tab-panel" data-panel="reviews" data-roles="customer" hidden>
+          <h2>My reviews</h2>
+          <div id="my-reviews-list"><p class="meta">You have not reviewed anyone yet.</p></div>
+        </section>
+
+        <section class="panel tab-panel" data-panel="payments" hidden>
+          <div class="panel-head"><h2>Payments</h2></div>
+          <div id="payments-actions" hidden></div>
+          <div id="payments-summary" class="payments-summary"></div>
+          <div id="payments-list"><p class="meta">No payments yet.</p></div>
+        </section>
       </div>
     </section>
   </main>
@@ -88,6 +216,121 @@
     </div>
   </footer>
 
-  <script src="js/dashboard.js?v=2"></script>
+  <div id="pkg-modal" class="modal" hidden>
+    <div class="modal-panel">
+      <button class="modal-close" id="pkg-close" type="button" aria-label="Close">&times;</button>
+      <h2 id="pkg-title">Add package</h2>
+      <form id="pkg-form">
+        <label for="pkg-name">Title</label>
+        <input id="pkg-name" name="title" maxlength="150" required />
+        <label for="pkg-desc">Description</label>
+        <textarea id="pkg-desc" name="description" rows="3"></textarea>
+        <label for="pkg-price">Price (USD)</label>
+        <input id="pkg-price" name="price" type="number" min="0" step="0.01" required />
+        <p id="pkg-error" class="form-error" hidden></p>
+        <button class="btn btn-block" type="submit">Save package</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="photo-modal" class="modal" hidden>
+    <div class="modal-panel">
+      <button class="modal-close" id="photo-close" type="button" aria-label="Close">&times;</button>
+      <h2>Add portfolio photo</h2>
+      <form id="photo-form">
+        <label for="photo-url">Image URL</label>
+        <input id="photo-url" name="image" type="url" placeholder="https://…" required />
+        <label for="photo-caption">Caption (optional)</label>
+        <input id="photo-caption" name="caption" maxlength="200" />
+        <p id="photo-error" class="form-error" hidden></p>
+        <button class="btn btn-block" type="submit">Add photo</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="gallery-modal" class="modal modal-wide" hidden>
+    <div class="modal-panel modal-panel-wide">
+      <button class="modal-close" id="gallery-close" type="button" aria-label="Close">&times;</button>
+      <h2 id="gallery-title">Gallery</h2>
+      <p class="modal-sub" id="gallery-sub"></p>
+      <p class="meta" id="gallery-client-hint" hidden>Tap ★ to save a photo, Download high res for full quality, or Download preview to share.</p>
+
+      <div id="gallery-pay-banner" class="pay-banner" hidden>
+        <p id="gallery-pay-text"></p>
+        <button class="btn btn-sm" id="gallery-pay-action" type="button">Pay now</button>
+      </div>
+
+      <div id="gallery-share" class="share-row" hidden>
+        <input id="share-url" readonly placeholder="Share link appears here" />
+        <button class="btn btn-sm" id="btn-share" type="button">Create share link</button>
+        <button class="btn btn-ghost btn-sm" id="btn-copy-share" type="button" hidden>Copy</button>
+      </div>
+
+      <div id="gallery-photos" class="portfolio-grid"></div>
+      <p class="meta" id="gallery-empty" hidden>No photos in this gallery yet.</p>
+
+<form id="upload-form" class="upload-row" hidden>
+  <input id="upload-file" type="file" accept="image/*" class="file-input" />
+  <label class="btn btn-sm" for="upload-file">Choose photo</label>
+  <span id="upload-file-name" class="meta">No photo selected</span>
+  <input id="upload-caption" maxlength="200" placeholder="Caption (optional)" />
+  <button class="btn btn-sm" type="submit">Upload photo</button>
+  <p id="upload-error" class="form-error" hidden></p>
+</form>
+    </div>
+  </div>
+
+  <div id="gallery-new-modal" class="modal" hidden>
+    <div class="modal-panel">
+      <button class="modal-close" id="gallery-new-close" type="button" aria-label="Close">&times;</button>
+      <h2>Create gallery</h2>
+      <form id="gallery-new-form">
+        <label for="gallery-new-shoot">Shoot</label>
+        <select id="gallery-new-shoot" required></select>
+        <p id="gallery-new-error" class="form-error" hidden></p>
+        <button class="btn btn-block" type="submit">Create gallery</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="review-modal" class="modal" hidden>
+    <div class="modal-panel">
+      <button class="modal-close" id="review-close" type="button" aria-label="Close">&times;</button>
+      <h2 id="review-modal-title">My review</h2>
+      <form id="review-form">
+        <label for="review-rating">Rating</label>
+        <select id="review-rating" required>
+          <option value="5">★★★★★ Excellent</option>
+          <option value="4">★★★★☆ Good</option>
+          <option value="3">★★★☆☆ Okay</option>
+          <option value="2">★★☆☆☆ Poor</option>
+          <option value="1">★☆☆☆☆ Very poor</option>
+        </select>
+        <label for="review-comment">Comment (optional)</label>
+        <textarea id="review-comment" rows="3"></textarea>
+        <p id="review-error" class="form-error" hidden></p>
+        <button class="btn btn-block" type="submit">Save review</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lb-btn lb-close" id="lb-close" aria-label="Close">✕</button>
+    <button class="lb-btn lb-prev" id="lb-prev" aria-label="Previous photo">‹</button>
+    <figure class="lb-stage">
+      <img id="lb-img" alt="" />
+      <figcaption class="lb-caption" id="lb-caption"></figcaption>
+    </figure>
+    <button class="lb-btn lb-next" id="lb-next" aria-label="Next photo">›</button>
+    <span class="lb-counter" id="lb-counter"></span>
+    <span class="lb-tools">
+      <button class="btn btn-sm" id="lb-download" type="button" hidden>Download high res</button>
+      <button class="btn btn-ghost btn-sm" id="lb-download-web" type="button" hidden>Download preview</button>
+      <button class="btn btn-ghost btn-sm" id="lb-favorite" type="button" hidden></button>
+    </span>
+  </div>
+
+  <script src="js/common.js?v=14"></script>
+  <script src="js/dashboard.js?v=14"></script>
 </body>
 </html>

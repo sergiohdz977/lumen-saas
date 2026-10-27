@@ -21,4 +21,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        return User.objects.create_user(**validated_data)
+        user = User.objects.create_user(**validated_data)
+        if user.role == User.ROLE_PHOTOGRAPHER:
+            from profiles.models import PhotographerProfile
+
+            PhotographerProfile.objects.create(user=user, studio_name=user.username)
+        return user

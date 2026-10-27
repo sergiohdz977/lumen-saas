@@ -3,6 +3,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.conf import settings
 from django.utils import timezone
 from bookings.models import BookingRequest
+from notifications.models import Notification
 from notifications.services import notify
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
@@ -29,31 +30,93 @@ def start_onboarding(user, country):
     return link.url
 
 
-def start_checkout(user, booking):
+def booking_paid_kinds(booking):
+    """Kinds of payment already settled for this booking."""
+    return set(
+        Payment.objects.filter(
+            booking=booking, status=Payment.Status.PAID
+        ).values_list("kind", flat=True)
+    )
+
+
+def booking_is_fully_paid(booking):
+    """True once deposit and balance are both settled."""
+    if booking is None:
+        return True
+    return {Payment.Kind.DEPOSIT, Payment.Kind.BALANCE} <= booking_paid_kinds(
+        booking
+    )
+
+
+def _warn_stripe_missing(photographer, customer, booking):
+    """Tell the photographer why the customer cannot pay (once per read)."""
+    if Notification.objects.filter(
+        user=photographer, title="Stripe not connected", is_read=False
+    ).exists():
+        return
+    notify(
+        photographer,
+        "Stripe not connected",
+        (
+            f'"{customer.username}" tried to pay for '
+            f'"{booking.package.title}", but you cannot receive money '
+            "until you connect Stripe."
+        ),
+    )
+
+
+def start_checkout(user, booking, kind=Payment.Kind.DEPOSIT):
     """Create (or refresh) the pending payment and its Stripe session."""
     if booking.customer_id != user.id:
         raise PermissionDenied("That booking does not belong to you")
-    if booking.status != BookingRequest.Status.ACCEPTED:
-        raise ValidationError(
-            "You can only pay a deposit for an accepted booking"
-        )
+    paid_kinds = booking_paid_kinds(booking)
+    if kind == Payment.Kind.DEPOSIT:
+        if booking.status not in (
+            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
+            BookingRequest.Status.ACCEPTED,
+        ):
+            raise ValidationError(
+                "You can only pay a deposit for an accepted booking"
+            )
+        if Payment.Kind.DEPOSIT in paid_kinds:
+            raise ValidationError(
+                "The deposit for this booking has already been paid"
+            )
+        percentage = settings.DEPOSIT_PERCENTAGE
+    elif kind == Payment.Kind.BALANCE:
+        if booking.status != BookingRequest.Status.CONFIRMED:
+            raise ValidationError(
+                "You can only pay the balance for a confirmed booking"
+            )
+        if Payment.Kind.DEPOSIT not in paid_kinds:
+            raise ValidationError(
+                "Pay the deposit before paying the balance"
+            )
+        if Payment.Kind.BALANCE in paid_kinds:
+            raise ValidationError(
+                "The balance for this booking has already been paid"
+            )
+        shoot = getattr(booking, "shoot", None)
+        if shoot is None or getattr(shoot, "gallery", None) is None:
+            raise ValidationError(
+                "The gallery is not ready yet"
+            )
+        percentage = settings.BALANCE_PERCENTAGE
+    else:
+        raise ValidationError("Unknown payment kind")
     profile = booking.package.profile
     if not profile.stripe_account_id or not profile.stripe_onboarded:
+        _warn_stripe_missing(profile.user, user, booking)
         raise ValidationError(
             "The photographer has not finished setting up payments"
         )
-    payment = Payment.objects.filter(booking=booking).first()
-    if payment and payment.status == Payment.Status.PAID:
-        raise ValidationError(
-            "The deposit for this booking has already been paid"
-        )
+    payment = Payment.objects.filter(booking=booking, kind=kind).first()
     if payment is None:
-        amount = booking.package.price * Decimal(
-            settings.DEPOSIT_PERCENTAGE
-        ) / Decimal(100)
+        amount = booking.package.price * Decimal(percentage) / Decimal(100)
         amount_cents = (amount * 100).quantize(Decimal("1"), ROUND_HALF_UP)
         payment = Payment.objects.create(
             booking=booking,
+            kind=kind,
             customer=user,
             photographer=booking.package.profile.user,
             amount_cents=int(amount_cents),
@@ -71,7 +134,10 @@ def start_checkout(user, booking):
         amount_cents=payment.amount_cents,
         currency=payment.currency,
         payment=payment,
-        success_url=f"{settings.SITE_URL}/payments/success/",
+        success_url=(
+            f"{settings.SITE_URL}/payments/success/"
+            "?session_id={CHECKOUT_SESSION_ID}"
+        ),
         cancel_url=f"{settings.SITE_URL}/payments/cancel/",
         destination_account=profile.stripe_account_id,
         platform_fee_cents=platform_fee_cents,
@@ -107,6 +173,74 @@ def start_upgrade(user):
     return session.url
 
 
+def settle_payment(payment):
+    """Mark a payment as paid, confirm its booking and notify both sides."""
+    if payment.status == Payment.Status.PAID:
+        return payment
+    payment.status = Payment.Status.PAID
+    payment.paid_at = timezone.now()
+    payment.save(update_fields=["status", "paid_at"])
+    if payment.kind == Payment.Kind.DEPOSIT:
+        booking = payment.booking
+        confirmed = False
+        if booking.status in (
+            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
+            BookingRequest.Status.ACCEPTED,
+        ):
+            booking.status = BookingRequest.Status.CONFIRMED
+            booking.save(update_fields=["status"])
+            confirmed = True
+        notify(
+            payment.photographer,
+            "Deposit received",
+            f"{payment.customer.username}'s deposit was paid",
+        )
+        notify(
+            payment.customer,
+            "Payment confirmed",
+            (
+                "Your deposit was received and your booking is confirmed"
+                if confirmed
+                else "Your deposit was received"
+            ),
+        )
+    else:
+        notify(
+            payment.photographer,
+            "Balance received",
+            f"{payment.customer.username}'s final payment was paid",
+        )
+        notify(
+            payment.customer,
+            "Payment confirmed",
+            "Your remaining balance was received",
+        )
+    return payment
+
+
+def confirm_checkout_session(user, session_id):
+    """Settle a payment from the success page when no webhook is configured."""
+    session = providers.retrieve_checkout_session(session_id)
+    metadata = session.get("metadata") or {}
+    payment = None
+    if metadata.get("payment_id"):
+        payment = Payment.objects.filter(pk=metadata["payment_id"]).first()
+    if payment is None:
+        payment = Payment.objects.filter(
+            stripe_session_id=session_id
+        ).first()
+    if payment is None:
+        raise ValidationError(
+            "We could not find a payment for that Stripe session"
+        )
+    if payment.customer_id != user.id:
+        raise PermissionDenied("That payment does not belong to you")
+    if session.get("payment_status") != "paid":
+        # Still processing: the webhook will settle it when it lands.
+        return payment
+    return settle_payment(payment)
+
+
 def handle_webhook_event(event):
     """Apply a Stripe event to our payment. Safe to call twice."""
     if event["type"] == "account.updated":
@@ -127,24 +261,12 @@ def handle_webhook_event(event):
         payment = Payment.objects.filter(
             stripe_session_id=session["id"]
         ).first()
-    if payment is None or payment.status == Payment.Status.PAID:
-        # Unknown session, or the event arrived twice (Stripe retries):
-        # nothing to do, the answer must still be 200.
-        return payment
-    payment.status = Payment.Status.PAID
-    payment.paid_at = timezone.now()
-    payment.save(update_fields=["status", "paid_at"])
-    notify(
-        payment.photographer,
-        "Deposit received",
-        f"{payment.customer.username}'s deposit was paid",
-    )
-    notify(
-        payment.customer,
-        "Payment confirmed",
-        "Your deposit was received",
-    )
-    return payment
+    if payment is None:
+        # Unknown session: nothing to do, the answer must still be 200.
+        return None
+    # Safe to call twice: settle_payment ignores already-paid rows, so
+    # Stripe retries never double-notify.
+    return settle_payment(payment)
 
 
 def _handle_account_updated(event):

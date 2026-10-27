@@ -1,23 +1,8 @@
-const API =
-  window.location.port === "8000" || window.location.port === ""
-    ? "/api"
-    : "http://127.0.0.1:8000/api";
-
-const STORAGE = {
-  access: "lumen_access",
-  refresh: "lumen_refresh",
-  username: "lumen_username",
-};
-
 const params = new URLSearchParams(window.location.search);
 const slug = params.get("slug");
 
 const statusEl = document.getElementById("profile-status");
 const view = document.getElementById("profile-view");
-const btnLogin = document.getElementById("btn-login");
-const btnLogout = document.getElementById("btn-logout");
-const authUser = document.getElementById("auth-user");
-const authUsername = document.getElementById("auth-username");
 const lightbox = document.getElementById("lightbox");
 const lbImg = document.getElementById("lb-img");
 const lbCaption = document.getElementById("lb-caption");
@@ -25,32 +10,20 @@ const lbCounter = document.getElementById("lb-counter");
 const portfolioGrid = document.getElementById("portfolio-grid");
 const bookModal = document.getElementById("book-modal");
 const bookForm = document.getElementById("book-form");
-const bookPackage = document.getElementById("book-package");
 const bookDate = document.getElementById("book-date");
 const bookMessage = document.getElementById("book-message");
 const bookError = document.getElementById("book-error");
+const reviewModal = document.getElementById("review-modal");
+const reviewForm = document.getElementById("review-form");
+const reviewError = document.getElementById("review-error");
+const reviewCta = document.getElementById("review-cta");
+const reviewsList = document.getElementById("reviews-list");
 
 let portfolioPhotos = [];
 let lbIndex = 0;
 let myRole = null;
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function initSession() {
-  const username = localStorage.getItem(STORAGE.username);
-  const loggedIn = Boolean(username && localStorage.getItem(STORAGE.access));
-  btnLogin.hidden = loggedIn;
-  authUser.hidden = !loggedIn;
-  if (loggedIn) {
-    authUsername.textContent = username;
-  }
-}
+let myId = null;
+let photographerId = null;
 
 function renderProfile(p) {
   document.title = `${p.studio_name || p.username} — Lumen`;
@@ -86,6 +59,7 @@ function renderProfile(p) {
     phone.textContent = `Contact: ${p.phone}`;
   }
 
+  photographerId = p.user_id;
   statusEl.hidden = true;
   view.hidden = false;
 }
@@ -159,6 +133,78 @@ async function loadPortfolio() {
   }
 }
 
+function reviewHtml(item) {
+  return `
+    <div class="review-row">
+      <div class="review-head">
+        ${starsHtml(item.rating)}
+        <strong>${escapeHtml(item.customer_username)}</strong>
+        <span class="meta">${formatDate(item.created_at)}</span>
+      </div>
+      ${
+        item.comment
+          ? `<p class="review-comment">${escapeHtml(item.comment)}</p>`
+          : ""
+      }
+    </div>`;
+}
+
+function showRating(average, count) {
+  const row = document.getElementById("p-rating");
+  document.getElementById("p-rating-stars").innerHTML = starsHtml(average);
+  document.getElementById("p-rating-label").textContent =
+    `${average.toFixed(1)} · ${count} review${count === 1 ? "" : "s"}`;
+  row.hidden = false;
+}
+
+function updateReviewCta() {
+  const eligible =
+    isLoggedIn() &&
+    myRole === "customer" &&
+    Boolean(myId) &&
+    myId !== photographerId;
+  reviewCta.hidden = !eligible;
+}
+
+async function loadReviews() {
+  if (!photographerId) {
+    return;
+  }
+  document.getElementById("reviews-section").hidden = false;
+  if (!isLoggedIn()) {
+    reviewsList.innerHTML =
+      '<p class="meta">Log in to read and write reviews.</p>';
+    updateReviewCta();
+    return;
+  }
+  try {
+    const response = await apiFetch(
+      `/reviews/?photographer=${photographerId}`,
+      { silentAuth: true }
+    );
+    if (!response.ok) {
+      reviewsList.innerHTML =
+        '<p class="meta">Log in to read and write reviews.</p>';
+      return;
+    }
+    const data = await response.json();
+    const items = data.results || [];
+    if (items.length === 0) {
+      reviewsList.innerHTML =
+        '<p class="meta">No reviews yet — be the first.</p>';
+    } else {
+      reviewsList.innerHTML = items.map(reviewHtml).join("");
+      const average =
+        items.reduce((sum, item) => sum + Number(item.rating), 0) /
+        items.length;
+      showRating(average, data.count || items.length);
+    }
+    updateReviewCta();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 async function loadProfile() {
   if (!slug) {
     statusEl.textContent = "No profile specified.";
@@ -178,22 +224,20 @@ async function loadProfile() {
     renderProfile(await response.json());
     loadPackages();
     loadPortfolio();
+    loadReviews();
   } catch (error) {
     console.error(error);
     statusEl.textContent =
-      "Could not reach the API. Is daphne running on port 8000?";
+      "Could not reach the API. Is the server running on port 8000?";
   }
 }
 
-btnLogin.addEventListener("click", () => {
-  window.location.href = "index.html?login=1";
-});
-btnLogout.addEventListener("click", () => {
-  localStorage.removeItem(STORAGE.access);
-  localStorage.removeItem(STORAGE.refresh);
-  localStorage.removeItem(STORAGE.username);
-  initSession();
-});
+async function loadMe() {
+  const me = await fetchMe();
+  myRole = me ? me.role : null;
+  myId = me ? me.id : null;
+  updateReviewCta();
+}
 
 function renderLightbox() {
   const photo = portfolioPhotos[lbIndex];
@@ -244,37 +288,24 @@ lightbox.addEventListener("click", (event) => {
   }
 });
 document.addEventListener("keydown", (event) => {
-  if (lightbox.hidden) {
+  if (!lightbox.hidden) {
+    if (event.key === "Escape") {
+      closeLightbox();
+    } else if (event.key === "ArrowRight") {
+      stepLightbox(1);
+    } else if (event.key === "ArrowLeft") {
+      stepLightbox(-1);
+    }
     return;
   }
-  if (event.key === "Escape") {
-    closeLightbox();
-  } else if (event.key === "ArrowRight") {
-    stepLightbox(1);
-  } else if (event.key === "ArrowLeft") {
-    stepLightbox(-1);
+  if (event.key === "Escape" && !reviewModal.hidden) {
+    closeReviewModal();
   }
 });
 
-function showToast(message) {
-  let toast = document.getElementById("toast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.id = "toast";
-    toast.className = "toast";
-    document.body.appendChild(toast);
-  }
-  toast.textContent = message;
-  toast.hidden = false;
-  clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => {
-    toast.hidden = true;
-  }, 4000);
-}
-
 function openBookModal(packageId, title) {
   bookForm.dataset.packageId = packageId;
-  bookPackage.textContent = title;
+  document.getElementById("book-package").textContent = title;
   bookError.hidden = true;
   bookForm.reset();
   const now = new Date();
@@ -288,37 +319,10 @@ function closeBookModal() {
   bookModal.hidden = true;
 }
 
-async function loadMeRole() {
-  const access = localStorage.getItem(STORAGE.access);
-  if (!access) {
-    return;
-  }
-  try {
-    const response = await fetch(`${API}/auth/me/`, {
-      headers: { Authorization: `Bearer ${access}` },
-    });
-    if (response.status === 401) {
-      localStorage.removeItem(STORAGE.access);
-      localStorage.removeItem(STORAGE.refresh);
-      localStorage.removeItem(STORAGE.username);
-      initSession();
-      return;
-    }
-    if (response.ok) {
-      const me = await response.json();
-      myRole = me.role;
-    }
-  } catch (error) {
-    console.error(error);
-  }
-}
-
 async function handleBookSubmit(event) {
   event.preventDefault();
   bookError.hidden = true;
-  const access = localStorage.getItem(STORAGE.access);
-  if (!access) {
-    window.location.href = "index.html?login=1";
+  if (!requireLogin()) {
     return;
   }
   if (myRole && myRole !== "customer") {
@@ -334,35 +338,16 @@ async function handleBookSubmit(event) {
     return;
   }
   try {
-    const response = await fetch(`${API}/bookings/`, {
+    const response = await apiFetch("/bookings/", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${access}`,
-      },
-      body: JSON.stringify({
+      body: {
         package: packageId,
         date: bookDate.value,
         message: bookMessage.value.trim(),
-      }),
+      },
     });
-    if (response.status === 401) {
-      closeBookModal();
-      window.location.href = "index.html?login=1";
-      return;
-    }
     if (!response.ok) {
-      const error = await response.json().catch(() => null);
-      let message = `Server error (HTTP ${response.status}).`;
-      if (error) {
-        const raw = error.detail || Object.values(error)[0];
-        if (Array.isArray(raw)) {
-          message = raw.join(" ");
-        } else if (raw) {
-          message = String(raw);
-        }
-      }
-      bookError.textContent = message;
+      bookError.textContent = await readError(response);
       bookError.hidden = false;
       return;
     }
@@ -385,6 +370,52 @@ async function handleBookSubmit(event) {
   }
 }
 
+function openReviewModal() {
+  if (!requireLogin()) {
+    return;
+  }
+  reviewError.hidden = true;
+  reviewForm.reset();
+  reviewModal.hidden = false;
+  document.getElementById("review-rating").focus();
+}
+
+function closeReviewModal() {
+  reviewModal.hidden = true;
+}
+
+async function handleReviewSubmit(event) {
+  event.preventDefault();
+  reviewError.hidden = true;
+  if (!requireLogin()) {
+    return;
+  }
+  try {
+    const response = await apiFetch("/reviews/", {
+      method: "POST",
+      body: {
+        photographer: photographerId,
+        rating: Number(document.getElementById("review-rating").value),
+        comment: document.getElementById("review-comment").value.trim(),
+      },
+    });
+    if (!response.ok) {
+      reviewError.textContent = await readError(response);
+      reviewError.hidden = false;
+      return;
+    }
+    closeReviewModal();
+    reviewCta.hidden = true;
+    showToast("Thanks! Your review was published.");
+    await loadReviews();
+  } catch (error) {
+    console.error(error);
+    reviewError.textContent =
+      "Could not reach the API. Check that the server is running on port 8000.";
+    reviewError.hidden = false;
+  }
+}
+
 document.getElementById("packages-grid").addEventListener("click", (event) => {
   const button = event.target.closest(".pkg-book");
   if (!button) {
@@ -400,6 +431,19 @@ bookModal.addEventListener("click", (event) => {
 });
 bookForm.addEventListener("submit", handleBookSubmit);
 
-initSession();
+document
+  .getElementById("btn-write-review")
+  .addEventListener("click", openReviewModal);
+document
+  .getElementById("review-close")
+  .addEventListener("click", closeReviewModal);
+reviewModal.addEventListener("click", (event) => {
+  if (event.target === reviewModal) {
+    closeReviewModal();
+  }
+});
+reviewForm.addEventListener("submit", handleReviewSubmit);
+
+initHeader();
 loadProfile();
-loadMeRole();
+loadMe();

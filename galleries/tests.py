@@ -9,8 +9,11 @@ from PIL import Image
 from rest_framework.test import APIClient
 from rest_framework import status
 
+from bookings.models import BookingRequest
 from clients.models import Client
-from profiles.models import PhotographerProfile
+from notifications.models import Notification
+from payments.models import Payment
+from profiles.models import Package, PhotographerProfile
 from shoots.models import Shoot
 from users.models import User
 from .models import Favorite, Gallery, Photo
@@ -144,6 +147,26 @@ class GalleryAccessTests(TestCase):
         self.api.force_authenticate(self.luis)
         response = self.api.get("/api/galleries/")
         self.assertEqual(response.data["count"], 0)
+
+    def test_list_includes_photo_count(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.get("/api/galleries/")
+        self.assertEqual(response.data["results"][0]["photo_count"], 1)
+
+    def test_detail_includes_photo_count(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.get(f"/api/galleries/{self.gallery_ana.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["photo_count"], 1)
+
+    def test_gallery_without_photos_reports_zero(self):
+        self.api.force_authenticate(self.beto)
+        self.api.post(
+            "/api/galleries/", {"shoot": self.shoot_beto.pk}, format="json"
+        )
+        response = self.api.get("/api/galleries/")
+        counts = [item["photo_count"] for item in response.data["results"]]
+        self.assertIn(0, counts)
 
     def test_other_customer_cannot_retrieve_gallery(self):
         self.api.force_authenticate(self.luis)
@@ -742,6 +765,34 @@ class FavoritesTests(TestCase):
         response = self.api.delete(f"/api/favorites/{created.data['id']}/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_favoriting_notifies_the_photographer(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            "/api/favorites/", {"photo": self.photo_ana.pk}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        notification = Notification.objects.get(user=self.ana)
+        self.assertEqual(notification.title, "New favorite")
+        self.assertIn("maria", notification.message)
+        self.assertIn("Boda de Maria", notification.message)
+
+    def test_favorite_notification_is_not_sent_to_the_customer(self):
+        self.api.force_authenticate(self.maria)
+        self.api.post("/api/favorites/", {"photo": self.photo_ana.pk})
+        self.assertFalse(
+            Notification.objects.filter(user=self.maria).exists()
+        )
+
+    def test_unfavorite_does_not_create_a_notification(self):
+        self.api.force_authenticate(self.maria)
+        created = self.api.post(
+            "/api/favorites/", {"photo": self.photo_ana.pk}, format="json"
+        )
+        self.assertEqual(Notification.objects.count(), 1)
+        response = self.api.delete(f"/api/favorites/{created.data['id']}/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(Notification.objects.count(), 1)
+
 
 class PhotographerFavoriteVisibilityTests(TestCase):
     @classmethod
@@ -1166,3 +1217,176 @@ class PlanLimitTests(TestCase):
             format="multipart",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+
+class PaymentGateTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.ana_profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+            is_published=True,
+        )
+        cls.package = Package.objects.create(
+            profile=cls.ana_profile, title="Boda completa", price=200
+        )
+        cls.client_maria = Client.objects.create(
+            photographer=cls.ana, user=cls.maria, name="Maria F"
+        )
+        cls.booking = BookingRequest.objects.create(
+            customer=cls.maria,
+            package=cls.package,
+            date="2026-11-20T10:00:00Z",
+            status=BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
+        )
+        cls.shoot_ana = Shoot.objects.create(
+            client=cls.client_maria,
+            title="Boda de Maria",
+            shoot_type="boda",
+            date="2026-11-20T10:00:00Z",
+            booking=cls.booking,
+        )
+        cls.gallery_ana = Gallery.objects.create(shoot=cls.shoot_ana)
+        cls.photo_ana = Photo.objects.create(
+            gallery=cls.gallery_ana,
+            image="https://example.com/original1.jpg",
+            preview="https://example.com/preview1.jpg",
+            thumbnail="https://example.com/thumb1.jpg",
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def _pay(self, kind, stripe_id):
+        Payment.objects.create(
+            booking=self.booking,
+            kind=kind,
+            customer=self.maria,
+            photographer=self.ana,
+            amount_cents=4000 if kind == Payment.Kind.DEPOSIT else 16000,
+            stripe_session_id=stripe_id,
+            status=Payment.Status.PAID,
+        )
+
+    def _pay_all(self):
+        self._pay(Payment.Kind.DEPOSIT, "cs_gate_dep")
+        self._pay(Payment.Kind.BALANCE, "cs_gate_bal")
+
+    def test_customer_high_res_download_blocked_before_payment(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(f"/api/photos/{self.photo_ana.pk}/download/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("high quality", str(response.data))
+
+    def test_customer_light_download_allowed_before_payment(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            f"/api/photos/{self.photo_ana.pk}/download/",
+            {"version": "light"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_deposit_alone_does_not_unlock_high_res(self):
+        self._pay(Payment.Kind.DEPOSIT, "cs_gate_dep")
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(f"/api/photos/{self.photo_ana.pk}/download/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_full_payment_unlocks_high_res(self):
+        self._pay_all()
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(f"/api/photos/{self.photo_ana.pk}/download/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["download_count"], 1)
+
+    def test_photographer_high_res_allowed_before_payment(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(f"/api/photos/{self.photo_ana.pk}/download/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_unpaid_customer_sees_masked_image(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.get(f"/api/photos/{self.photo_ana.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["image"], "https://example.com/preview1.jpg"
+        )
+
+    def test_fully_paid_customer_sees_original_image(self):
+        self._pay_all()
+        self.api.force_authenticate(self.maria)
+        response = self.api.get(f"/api/photos/{self.photo_ana.pk}/")
+        self.assertEqual(
+            response.data["image"], "https://example.com/original1.jpg"
+        )
+
+    def test_photographer_always_sees_original_image(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.get(f"/api/photos/{self.photo_ana.pk}/")
+        self.assertEqual(
+            response.data["image"], "https://example.com/original1.jpg"
+        )
+
+    def test_gallery_flags_show_awaiting_deposit(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.get(f"/api/galleries/{self.gallery_ana.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["booking_status"], "accepted_pending_deposit"
+        )
+        self.assertFalse(response.data["fully_paid"])
+
+    def test_gallery_flag_fully_paid_after_balance(self):
+        self._pay_all()
+        self.api.force_authenticate(self.maria)
+        response = self.api.get(f"/api/galleries/{self.gallery_ana.pk}/")
+        self.assertTrue(response.data["fully_paid"])
+
+    def test_photographer_gallery_flag_is_fully_paid(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.get(f"/api/galleries/{self.gallery_ana.pk}/")
+        self.assertTrue(response.data["fully_paid"])
+
+    def _share_token(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            f"/api/galleries/{self.gallery_ana.pk}/share-link/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.data["url"].rstrip("/").rsplit("/", 1)[-1]
+
+    def test_share_view_masks_image_for_anonymous_visitor(self):
+        token = self._share_token()
+        anon = APIClient()
+        response = anon.get(f"/api/gallery-view/{token}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["gallery"]["fully_paid"])
+        self.assertEqual(
+            response.data["photos"][0]["image"],
+            "https://example.com/preview1.jpg",
+        )
+
+    def test_share_view_shows_original_after_full_payment(self):
+        self._pay_all()
+        token = self._share_token()
+        anon = APIClient()
+        response = anon.get(f"/api/gallery-view/{token}/")
+        self.assertTrue(response.data["gallery"]["fully_paid"])
+        self.assertEqual(
+            response.data["photos"][0]["image"],
+            "https://example.com/original1.jpg",
+        )

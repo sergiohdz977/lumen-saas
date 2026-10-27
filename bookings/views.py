@@ -1,4 +1,8 @@
+from datetime import timedelta
+
+from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -11,7 +15,7 @@ from users.permissions import IsCustomer, IsPhotographer
 from notifications.services import notify
 from .models import BookingRequest
 from .serializers import BookingRequestSerializer
-from .tasks import booking_accepted_email
+from .tasks import booking_accepted_email, enforce_deposit_deadline
 
 
 class BookingRequestViewSet(viewsets.ModelViewSet):
@@ -47,7 +51,9 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def accept(self, request, pk=None):
-        return self._transition(request, BookingRequest.Status.ACCEPTED)
+        return self._transition(
+            request, BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT
+        )
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
@@ -59,7 +65,7 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
             raise ValidationError(
                 "Only pending requests can be managed"
             )
-        if new_status == BookingRequest.Status.ACCEPTED:
+        if new_status == BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT:
             self._accept(booking)
         else:
             booking.status = new_status
@@ -68,6 +74,9 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
 
     def _accept(self, booking):
         photographer = self.request.user
+        deadline = timezone.now() + timedelta(
+            hours=settings.DEPOSIT_DEADLINE_HOURS
+        )
         with transaction.atomic():
             has_conflict = Shoot.objects.filter(
                 client__photographer=photographer,
@@ -94,12 +103,23 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
                 title=f"{booking.package.title} - {booking.customer.username}",
                 shoot_type=booking.package.title,
                 date=booking.date,
+                booking=booking,
             )
-            booking.status = BookingRequest.Status.ACCEPTED
-            booking.save(update_fields=["status"])
+            booking.status = BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT
+            booking.deposit_deadline = deadline
+            booking.save(update_fields=["status", "deposit_deadline"])
+            transaction.on_commit(
+                lambda: enforce_deposit_deadline.apply_async(
+                    (booking.pk,), eta=deadline
+                )
+            )
         booking_accepted_email.delay(booking.pk)
         notify(
             booking.customer,
             "Booking accepted",
-            f'Your booking for "{booking.package.title}" was accepted',
+            (
+                f'Your booking for "{booking.package.title}" was accepted. '
+                f"Pay the deposit within {settings.DEPOSIT_DEADLINE_HOURS} "
+                "hours to confirm it."
+            ),
         )

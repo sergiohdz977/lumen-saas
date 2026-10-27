@@ -1,6 +1,7 @@
 import stripe
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from users.models import User
@@ -54,7 +55,9 @@ class PaymentViewSet(
         serializer = CheckoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         payment, url = services.start_checkout(
-            request.user, serializer.validated_data["booking"]
+            request.user,
+            serializer.validated_data["booking"],
+            serializer.validated_data["kind"],
         )
         return Response(
             {
@@ -62,6 +65,25 @@ class PaymentViewSet(
                 "checkout_url": url,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=["post"], url_path="confirm-session")
+    def confirm_session(self, request):
+        """Settle a checkout from the success page (webhook fallback)."""
+        session_id = str(request.data.get("session_id") or "").strip()
+        if not session_id:
+            raise ValidationError("session_id is required")
+        try:
+            payment = services.confirm_checkout_session(
+                request.user, session_id
+            )
+        except stripe.InvalidRequestError:
+            raise ValidationError("That Stripe session does not exist")
+        return Response(
+            {
+                "payment": PaymentSerializer(payment).data,
+                "booking_status": payment.booking.status,
+            }
         )
 
 

@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
+from payments.services import booking_is_fully_paid
 from shoots.models import Shoot
+from users.models import User
 from .limits import ensure_gallery_quota, ensure_photo_quota
 from .models import Favorite, Gallery, Photo
 from .storage import store_image
@@ -21,15 +23,53 @@ class GallerySerializer(serializers.ModelSerializer):
         source="shoot.title", read_only=True
     )
     client_username = serializers.SerializerMethodField()
+    photo_count = serializers.SerializerMethodField()
+    booking_status = serializers.SerializerMethodField()
+    fully_paid = serializers.SerializerMethodField()
 
     class Meta:
         model = Gallery
-        fields = ["id", "shoot", "shoot_title", "client_username", "created_at"]
-        read_only_fields = ["id", "shoot_title", "client_username", "created_at"]
+        fields = [
+            "id",
+            "shoot",
+            "shoot_title",
+            "client_username",
+            "photo_count",
+            "booking_status",
+            "fully_paid",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "shoot_title",
+            "client_username",
+            "photo_count",
+            "booking_status",
+            "fully_paid",
+            "created_at",
+        ]
 
     def get_client_username(self, obj):
         user = obj.shoot.client.user
         return user.username if user else None
+
+    def get_photo_count(self, obj):
+        if hasattr(obj, "photo_count"):
+            return obj.photo_count
+        return obj.photos.count()
+
+    def get_booking_status(self, obj):
+        booking = getattr(obj.shoot, "booking", None)
+        return booking.status if booking else None
+
+    def get_fully_paid(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            if user.role == User.ROLE_PHOTOGRAPHER:
+                return True
+        booking = getattr(obj.shoot, "booking", None)
+        return booking_is_fully_paid(booking)
 
     def validate_shoot(self, value):
         if value.client.photographer != self.context["request"].user:
@@ -65,7 +105,26 @@ class PhotoSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data["image"] = instance.image
+        if not self._viewer_can_download_original(instance):
+            data["image"] = instance.preview or instance.thumbnail or ""
         return data
+
+    def _viewer_can_download_original(self, instance):
+        """Photographers and paid customers get the original file."""
+        request = self.context.get("request")
+        if request is None:
+            return True
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            if user.role == User.ROLE_PHOTOGRAPHER:
+                return True
+        shoot = instance.gallery.shoot
+        cache = self.context.setdefault("_fully_paid_by_shoot", {})
+        if shoot.pk not in cache:
+            cache[shoot.pk] = booking_is_fully_paid(
+                getattr(shoot, "booking", None)
+            )
+        return cache[shoot.pk]
 
     def create(self, validated_data):
         image_file = validated_data.pop("image")

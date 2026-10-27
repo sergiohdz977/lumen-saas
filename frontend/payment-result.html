@@ -1,0 +1,107 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lumen — Payment</title>
+  <link rel="stylesheet" href="/css/styles.css?v=14" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="logo" href="/index.html">Lumen<span class="logo-dot">.</span></a>
+      <nav class="nav">
+        <a href="/index.html#photographers" data-nav-photos>Photographers</a>
+        <a href="/index.html" data-nav-public hidden>Public site</a>
+        <a href="/dashboard.html">Dashboard</a>
+        <span id="bell-area" class="bell-area" hidden>
+          <button id="btn-bell" class="bell-btn" type="button" aria-label="Notifications" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span id="bell-badge" class="bell-badge" hidden>0</span>
+          </button>
+          <div id="bell-panel" class="bell-panel" hidden>
+            <div id="bell-list" class="bell-list"></div>
+            <a class="bell-all" href="/dashboard.html?tab=notifications">View all notifications</a>
+          </div>
+        </span>
+        <span id="auth-area">
+          <button id="btn-signup" class="btn btn-ghost" hidden>Sign up</button>
+          <button id="btn-login" class="btn btn-ghost">Log in</button>
+          <span id="auth-user" hidden>
+            <span class="auth-greeting">
+              Hi, <strong id="auth-username"></strong>
+            </span>
+            <button id="btn-logout" class="btn btn-ghost">Log out</button>
+          </span>
+        </span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel payment-result">
+      <div class="result-icon" id="result-icon">✓</div>
+      <h1 id="result-title">Payment confirmed</h1>
+      <p class="hero-sub" id="result-sub">Thank you! Your payment was received.</p>
+      <p class="meta" id="result-note">It appears in your dashboard as soon as the payment settles (instant in test mode).</p>
+      <a class="btn" href="/dashboard.html?tab=payments">Back to dashboard</a>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      Lumen — photography booking platform · API powered by Django REST Framework
+    </div>
+  </footer>
+
+  <script src="/js/common.js?v=14"></script>
+  <script>
+    (function () {
+      var canceled = window.location.pathname.indexOf("/cancel") !== -1;
+      if (canceled) {
+        document.getElementById("result-icon").textContent = "✗";
+        document.getElementById("result-icon").classList.add("is-cancel");
+        document.getElementById("result-title").textContent =
+          "Payment cancelled";
+        document.getElementById("result-sub").textContent =
+          "No charge was made. You can retry from your dashboard whenever you want.";
+        document.getElementById("result-note").textContent = "";
+        document.title = "Lumen — Payment cancelled";
+      }
+      initHeader();
+
+      var sessionId = new URLSearchParams(window.location.search).get(
+        "session_id"
+      );
+      if (!canceled && sessionId) {
+        var note = document.getElementById("result-note");
+        apiFetch("/payments/confirm-session/", {
+          method: "POST",
+          body: { session_id: sessionId },
+        })
+          .then(function (response) {
+            if (!response.ok) {
+              throw new Error("confirmation failed");
+            }
+            return response.json();
+          })
+          .then(function (data) {
+            if (data.payment.status !== "paid") {
+              note.textContent =
+                "Your payment is still processing. It will appear in your dashboard shortly.";
+              return;
+            }
+            if (data.booking_status === "confirmed") {
+              document.getElementById("result-sub").textContent =
+                "Your deposit was received and your booking is confirmed.";
+            }
+            note.textContent = "Payment confirmed.";
+          })
+          .catch(function () {
+            /* Keep the generic note if the API is unreachable. */
+          });
+      }
+    })();
+  </script>
+</body>
+</html>

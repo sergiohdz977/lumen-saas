@@ -27,9 +27,12 @@ class MeView(APIView):
             data["profile"] = {
                 "studio_name": profile.studio_name,
                 "slug": profile.slug,
+                "bio": profile.bio,
                 "city": profile.city,
                 "specialties": profile.specialties,
+                "phone": profile.phone,
                 "plan": profile.plan,
                 "is_published": profile.is_published,
+                "stripe_connected": bool(profile.stripe_account_id),
             }
         return Response(data)

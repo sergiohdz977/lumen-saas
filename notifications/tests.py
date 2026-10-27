@@ -81,6 +81,19 @@ class NotificationRestTests(TestCase):
         ).exists()
         self.assertFalse(unread)
 
+    def test_unread_filter_returns_only_unread(self):
+        Notification.objects.create(user=self.maria, title="Recien llegada")
+        Notification.objects.filter(
+            user=self.maria, title="Booking accepted"
+        ).update(is_read=True)
+        self.api.force_authenticate(self.maria)
+        response = self.api.get("/api/notifications/?unread=1")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(
+            response.data["results"][0]["title"], "Recien llegada"
+        )
+
 
 class NotifyIntegrationTests(TestCase):
     """The three business events that create notifications."""

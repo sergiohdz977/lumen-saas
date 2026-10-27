@@ -57,6 +57,10 @@ urlpatterns = [
     path("index.html", page("index.html")),
     path("dashboard.html", page("dashboard.html"), name="frontend-dashboard"),
     path("profile.html", page("profile.html"), name="frontend-profile"),
+    path("gallery.html", page("gallery.html"), name="frontend-gallery"),
+    # Stripe checkout return pages (the webhook marks the payment as paid).
+    path("payments/success/", page("payment-result.html")),
+    path("payments/cancel/", page("payment-result.html")),
     re_path(
         r"^(?P<path>(?:css|js|img)/[A-Za-z0-9._/-]+)$",
         frontend_asset,

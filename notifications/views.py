@@ -21,7 +21,11 @@ class NotificationViewSet(
         user = self.request.user
         if not user.is_authenticated:
             return Notification.objects.none()
-        return Notification.objects.filter(user=user)
+        qs = Notification.objects.filter(user=user)
+        # `?unread=1` powers the unread badge in the web dashboard.
+        if self.request.query_params.get("unread") == "1":
+            qs = qs.filter(is_read=False)
+        return qs
 
     @action(detail=True, methods=["post"])
     def read(self, request, pk=None):

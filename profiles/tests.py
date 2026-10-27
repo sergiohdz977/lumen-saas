@@ -87,6 +87,7 @@ class PublicProfileEndpointsTests(TestCase):
         response = self.api.get("/api/profiles/ana-studio/")
         expected = {
             "id",
+            "user_id",
             "slug",
             "username",
             "studio_name",
@@ -94,10 +95,17 @@ class PublicProfileEndpointsTests(TestCase):
             "city",
             "specialties",
             "phone",
+            "is_published",
             "plan",
             "created_at",
         }
         self.assertEqual(set(response.data.keys()), expected)
+
+    def test_response_exposes_user_id(self):
+        response = self.api.get("/api/profiles/ana-studio/")
+        self.assertEqual(
+            response.data["user_id"], self.photographer.pk
+        )
 
     def test_filter_by_city_returns_matching_profiles(self):
         user = User.objects.create_user(
@@ -602,3 +610,143 @@ class ProfileOwnershipAuditTests(TestCase):
         self.api.force_authenticate(self.maria)
         response = self.api.delete(f"/api/packages/{self.package.pk}/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ProfileUpdateEndpointsTests(TestCase):
+    """Owner-only ``PATCH /api/profiles/{slug}/`` used by the web dashboard."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(
+            username="duena",
+            email="duena@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.other = User.objects.create_user(
+            username="otrafoto3",
+            email="otrafoto3@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.customer = User.objects.create_user(
+            username="cliente3",
+            email="cliente3@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.profile = PhotographerProfile.objects.create(
+            user=cls.owner,
+            studio_name="Estudio Duena",
+            slug="estudio-duena",
+            city="Sevilla",
+            is_published=True,
+        )
+        cls.hidden = PhotographerProfile.objects.create(
+            user=cls.other,
+            studio_name="Estudio Oculto",
+            slug="estudio-oculto",
+            is_published=False,
+        )
+        Package.objects.create(
+            profile=cls.hidden, title="Sesion oculta", price="50.00"
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def test_owner_can_update_own_profile(self):
+        self.api.force_authenticate(self.owner)
+        response = self.api.patch(
+            "/api/profiles/estudio-duena/",
+            {
+                "studio_name": "Estudio Duena II",
+                "bio": "Bodas y eventos",
+                "city": "Malaga",
+                "specialties": "weddings",
+                "phone": "+34 600 000 000",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.studio_name, "Estudio Duena II")
+        self.assertEqual(self.profile.city, "Malaga")
+        self.assertEqual(self.profile.phone, "+34 600 000 000")
+
+    def test_owner_can_publish_and_unpublish(self):
+        self.api.force_authenticate(self.owner)
+        response = self.api.patch(
+            "/api/profiles/estudio-duena/", {"is_published": False}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.is_published)
+        response = self.api.patch(
+            "/api/profiles/estudio-duena/", {"is_published": True}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.is_published)
+
+    def test_owner_can_update_own_unpublished_profile(self):
+        self.api.force_authenticate(self.other)
+        response = self.api.patch(
+            "/api/profiles/estudio-oculto/", {"city": "Bogota"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.hidden.refresh_from_db()
+        self.assertEqual(self.hidden.city, "Bogota")
+
+    def test_anonymous_update_denied(self):
+        response = self.api.patch(
+            "/api/profiles/estudio-duena/", {"studio_name": "Hack"}
+        )
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
+
+    def test_customer_update_denied(self):
+        self.api.force_authenticate(self.customer)
+        response = self.api.patch(
+            "/api/profiles/estudio-duena/", {"studio_name": "Hack"}
+        )
+        self.assertEqual(
+            response.status_code, status.HTTP_403_FORBIDDEN
+        )
+
+    def test_other_photographer_cannot_update(self):
+        self.api.force_authenticate(self.other)
+        response = self.api.patch(
+            "/api/profiles/estudio-duena/", {"studio_name": "Hack"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_plan_cannot_be_changed(self):
+        self.api.force_authenticate(self.owner)
+        response = self.api.patch(
+            "/api/profiles/estudio-duena/", {"plan": "pro"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.plan, PhotographerProfile.PLAN_FREE)
+
+    def test_delete_still_not_allowed(self):
+        self.api.force_authenticate(self.owner)
+        response = self.api.delete("/api/profiles/estudio-duena/")
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    def test_photographer_lists_own_unpublished_catalog(self):
+        self.api.force_authenticate(self.other)
+        response = self.api.get("/api/packages/")
+        titles = [p["title"] for p in response.data["results"]]
+        self.assertIn("Sesion oculta", titles)
+
+    def test_anonymous_list_still_hides_unpublished_catalog(self):
+        response = self.api.get("/api/packages/")
+        titles = [p["title"] for p in response.data["results"]]
+        self.assertNotIn("Sesion oculta", titles)

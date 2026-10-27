@@ -4,11 +4,13 @@ from .models import Package, PhotographerProfile, PortfolioPhoto
 
 class PhotographerProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
 
     class Meta:
         model = PhotographerProfile
         fields = [
             "id",
+            "user_id",
             "slug",
             "username",
             "studio_name",
@@ -16,10 +18,18 @@ class PhotographerProfileSerializer(serializers.ModelSerializer):
             "city",
             "specialties",
             "phone",
+            "is_published",
             "plan",
             "created_at",
         ]
-        read_only_fields = fields
+        read_only_fields = [
+            "id",
+            "user_id",
+            "slug",
+            "username",
+            "plan",
+            "created_at",
+        ]
 
 
 class PackageSerializer(serializers.ModelSerializer):

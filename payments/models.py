@@ -8,10 +8,17 @@ class Payment(models.Model):
         PAID = "paid", "Paid"
         FAILED = "failed", "Failed"
 
-    booking = models.OneToOneField(
+    class Kind(models.TextChoices):
+        DEPOSIT = "deposit", "Deposit"
+        BALANCE = "balance", "Balance"
+
+    booking = models.ForeignKey(
         "bookings.BookingRequest",
         on_delete=models.CASCADE,
-        related_name="payment",
+        related_name="payments",
+    )
+    kind = models.CharField(
+        max_length=20, choices=Kind.choices, default=Kind.DEPOSIT
     )
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,

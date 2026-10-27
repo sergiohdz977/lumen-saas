@@ -15,6 +15,7 @@ class BookingRequestSerializer(serializers.ModelSerializer):
     profile_studio_name = serializers.CharField(
         source="package.profile.studio_name", read_only=True, allow_blank=True
     )
+    shoot = serializers.SerializerMethodField()
 
     class Meta:
         model = BookingRequest
@@ -28,6 +29,8 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "date",
             "message",
             "status",
+            "deposit_deadline",
+            "shoot",
             "created_at",
         ]
         read_only_fields = [
@@ -37,8 +40,14 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "profile_slug",
             "profile_studio_name",
             "status",
+            "deposit_deadline",
+            "shoot",
             "created_at",
         ]
+
+    def get_shoot(self, obj):
+        shoot = getattr(obj, "shoot", None)
+        return shoot.pk if shoot else None
 
     def validate_package(self, value):
         if not value.profile.is_published:

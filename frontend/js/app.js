@@ -1,37 +1,20 @@
-const API =
-  window.location.port === "8000" || window.location.port === ""
-    ? "/api"
-    : "http://127.0.0.1:8000/api";
-
-const STORAGE = {
-  access: "lumen_access",
-  refresh: "lumen_refresh",
-  username: "lumen_username",
-};
-
 const grid = document.getElementById("grid");
 const status = document.getElementById("status");
 const loadMoreBtn = document.getElementById("load-more");
+const searchForm = document.getElementById("search-form");
+const searchCity = document.getElementById("search-city");
+const searchSpecialty = document.getElementById("search-specialty");
+const searchClear = document.getElementById("search-clear");
 
-const btnLogin = document.getElementById("btn-login");
-const btnLogout = document.getElementById("btn-logout");
-const authUser = document.getElementById("auth-user");
-const authUsername = document.getElementById("auth-username");
 const authStatus = document.getElementById("auth-status");
 const loginModal = document.getElementById("login-modal");
 const loginForm = document.getElementById("login-form");
+const registerForm = document.getElementById("register-form");
 const loginClose = document.getElementById("login-close");
 const loginError = document.getElementById("login-error");
+const registerError = document.getElementById("register-error");
 
 let nextUrl = null;
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
 
 function cardHtml(profile) {
   const name = profile.studio_name || profile.username;
@@ -64,7 +47,25 @@ function cardHtml(profile) {
     </a>`;
 }
 
-async function loadPage(url) {
+function listUrl() {
+  const params = new URLSearchParams();
+  const city = searchCity.value.trim();
+  const specialty = searchSpecialty.value.trim();
+  if (city) {
+    params.set("city", city);
+  }
+  if (specialty) {
+    params.set("specialty", specialty);
+  }
+  const query = params.toString();
+  searchClear.hidden = !query;
+  return `${API}/profiles/${query ? `?${query}` : ""}`;
+}
+
+async function loadPage(url, { replace = false } = {}) {
+  if (replace) {
+    grid.innerHTML = "";
+  }
   status.hidden = false;
   status.textContent = "Loading photographers…";
   try {
@@ -83,55 +84,56 @@ async function loadPage(url) {
     loadMoreBtn.hidden = !nextUrl;
 
     if (grid.children.length === 0) {
-      status.textContent = "No photographers published yet.";
+      status.textContent = "No photographers match your search.";
     } else {
       status.hidden = true;
     }
   } catch (error) {
     status.hidden = false;
     status.textContent =
-      "Could not reach the API. Is daphne running on port 8000?";
+      "Could not reach the API. Is the server running on port 8000?";
     console.error(error);
   }
 }
 
-function openLogin() {
-  loginError.hidden = true;
-  loginModal.hidden = false;
-  document.getElementById("login-username").focus();
+function switchAuthTab(tab) {
+  document.querySelectorAll(".modal-tab").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.authTab === tab);
+  });
+  document.querySelectorAll("[data-auth-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.authPanel !== tab;
+  });
 }
 
-function closeLogin() {
+function openAuth(tab = "login") {
+  loginError.hidden = true;
+  registerError.hidden = true;
+  switchAuthTab(tab);
+  loginModal.hidden = false;
+  const firstInput = loginModal.querySelector(
+    `[data-auth-panel="${tab}"] input`
+  );
+  if (firstInput) {
+    firstInput.focus();
+  }
+}
+
+function closeAuth() {
   loginModal.hidden = true;
   loginForm.reset();
-}
-
-function updateAuthUI() {
-  const username = localStorage.getItem(STORAGE.username);
-  const loggedIn = Boolean(username && localStorage.getItem(STORAGE.access));
-  btnLogin.hidden = loggedIn;
-  authUser.hidden = !loggedIn;
-  authStatus.textContent = "";
-  if (loggedIn) {
-    authUsername.textContent = username;
-  }
+  registerForm.reset();
 }
 
 async function verifyToken() {
-  const access = localStorage.getItem(STORAGE.access);
-  if (!access) {
+  if (!isLoggedIn() || !authStatus) {
     return;
   }
   try {
-    const response = await fetch(`${API}/notifications/`, {
-      headers: { Authorization: `Bearer ${access}` },
-    });
+    const response = await apiFetch("/notifications/", { silentAuth: true });
     if (response.ok) {
       authStatus.textContent = " · JWT ✓";
     } else {
-      localStorage.removeItem(STORAGE.access);
-      localStorage.removeItem(STORAGE.refresh);
-      updateAuthUI();
+      header.update();
     }
   } catch (error) {
     console.error(error);
@@ -161,49 +163,127 @@ async function handleLogin(event) {
     }
 
     const data = await response.json();
-    localStorage.setItem(STORAGE.access, data.access);
-    localStorage.setItem(STORAGE.refresh, data.refresh || "");
-    localStorage.setItem(STORAGE.username, username);
-    closeLogin();
-    updateAuthUI();
+    meCache = null;
+    saveSession({ access: data.access, refresh: data.refresh, username });
+    closeAuth();
+    header.update();
     verifyToken();
+    showToast(`Welcome back, ${username}!`);
+    const me = await fetchMe().catch(() => null);
+    if (me && me.role === "photographer") {
+      window.location.href = "dashboard.html";
+    }
   } catch (error) {
-    loginError.textContent = "Could not reach the API. Is daphne running?";
+    loginError.textContent = "Could not reach the API. Is the server running?";
     loginError.hidden = false;
     console.error(error);
   }
 }
 
-function handleLogout() {
-  localStorage.removeItem(STORAGE.access);
-  localStorage.removeItem(STORAGE.refresh);
-  localStorage.removeItem(STORAGE.username);
-  updateAuthUI();
+async function handleRegister(event) {
+  event.preventDefault();
+  registerError.hidden = true;
+  const username = document.getElementById("reg-username").value.trim();
+  const email = document.getElementById("reg-email").value.trim();
+  const password = document.getElementById("reg-password").value;
+  const role = document.getElementById("reg-role").value;
+
+  try {
+    const response = await fetch(`${API}/auth/register/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, email, password, role }),
+    });
+    if (!response.ok) {
+      registerError.textContent = await readError(response);
+      registerError.hidden = false;
+      return;
+    }
+
+    // Sign the new account in automatically.
+    const login = await fetch(`${API}/auth/login/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    if (login.ok) {
+      const data = await login.json();
+      meCache = null;
+      saveSession({
+        access: data.access,
+        refresh: data.refresh,
+        username,
+        role,
+      });
+      fetchMe().catch(() => null);
+    }
+    closeAuth();
+    header.update();
+    verifyToken();
+    if (login.ok && role === "photographer") {
+      window.location.href = "dashboard.html";
+      return;
+    }
+    showToast(
+      role === "photographer"
+        ? "Account created! Set up your studio from the dashboard."
+        : "Account created! Pick a photographer and book your first session."
+    );
+  } catch (error) {
+    registerError.textContent =
+      "Could not reach the API. Is the server running?";
+    registerError.hidden = false;
+    console.error(error);
+  }
 }
 
-btnLogin.addEventListener("click", openLogin);
-btnLogout.addEventListener("click", handleLogout);
-loginClose.addEventListener("click", closeLogin);
+const header = initHeader({
+  onLogin: () => openAuth("login"),
+  onSignup: () => openAuth("register"),
+});
+
+loginClose.addEventListener("click", closeAuth);
 loginModal.addEventListener("click", (event) => {
   if (event.target === loginModal) {
-    closeLogin();
+    closeAuth();
   }
 });
+document.querySelectorAll(".modal-tab").forEach((button) => {
+  button.addEventListener("click", () => switchAuthTab(button.dataset.authTab));
+});
 loginForm.addEventListener("submit", handleLogin);
+registerForm.addEventListener("submit", handleRegister);
+
+searchForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  loadPage(listUrl(), { replace: true });
+});
+searchClear.addEventListener("click", () => {
+  searchCity.value = "";
+  searchSpecialty.value = "";
+  loadPage(listUrl(), { replace: true });
+});
 loadMoreBtn.addEventListener("click", () => {
   if (nextUrl) {
     loadPage(nextUrl);
   }
 });
 
-updateAuthUI();
-verifyToken();
-loadPage(`${API}/profiles/`);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !loginModal.hidden) {
+    closeAuth();
+  }
+});
 
-if (
-  new URLSearchParams(window.location.search).get("login") === "1" &&
-  !localStorage.getItem(STORAGE.access)
-) {
-  openLogin();
+header.update();
+verifyToken();
+loadPage(listUrl());
+
+const auto = new URLSearchParams(window.location.search);
+if (!isLoggedIn() && auto.get("register") === "1") {
+  openAuth("register");
+  history.replaceState(null, "", "index.html");
+} else if (!isLoggedIn() && auto.get("login") === "1") {
+  openAuth("login");
   history.replaceState(null, "", "index.html");
 }

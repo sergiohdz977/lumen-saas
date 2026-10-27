@@ -262,6 +262,10 @@ STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 # Deposit due to confirm a booking, as a percentage of the package price.
 DEPOSIT_PERCENTAGE = 20
+# Remaining percentage charged as the balance after the shoot.
+BALANCE_PERCENTAGE = 100 - DEPOSIT_PERCENTAGE
+# Hours the customer has to pay the deposit before the booking cancels.
+DEPOSIT_DEADLINE_HOURS = 48
 # Platform commission taken from each deposit (Stripe Connect fee).
 STRIPE_PLATFORM_FEE_PERCENTAGE = int(
     os.getenv("STRIPE_PLATFORM_FEE_PERCENTAGE", "0")

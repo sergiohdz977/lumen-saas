@@ -115,17 +115,30 @@ docs/           CHANGELOG and roadmap notes
 - `Notification`: user (FK), title, message, is_read, created_at
 
 ## Current state
-- Done: all backend modules — auth/roles, clients, shoots state machine, profiles,
-  packages, portfolio, bookings (accept/reject → shoot + client + notifications),
+- Done: all backend modules - auth/roles, clients, shoots state machine, profiles,
+  packages, portfolio, bookings (accept/reject -> shoot + client + notifications),
   galleries, reviews, notifications (REST + WebSocket + email), payments (Stripe,
-  isolated). 257 passing tests.
-- Done: web frontend in `frontend/` (vanilla HTML/CSS/JS): public catalog with
-  pagination, photographer profile with packages/portfolio/lightbox/booking modal,
-  JWT login, private dashboard with account, notifications, booking requests
-  (accept/reject) and shoots (booked → editing → delivered). Served by Django on
-  port 8000 (same origin as the API). Demo data via `manage.py seed_demo`.
-- Next: gallery/reviews UI on the web, README/CHANGELOG catch-up, commit pending
-  work, Cloudinary for real photo uploads.
+  isolated). 272 passing tests.
+- Done: complete web frontend in `frontend/` (vanilla HTML/CSS/JS), served by
+  Django on port 8000 (same origin as the API), shared helpers in `js/common.js`
+  (silent JWT refresh on 401):
+  - `index.html`: catalog with city/specialty search, log in / sign up tabs with
+    role picker and auto sign-in
+  - `profile.html`: packages, portfolio + lightbox, booking modal, reviews with
+    average rating and write-review form (customers)
+  - `dashboard.html`: tabs per role - overview, notifications (unread badge,
+    mark read / mark all), requests (accept, reject, pay deposit -> Stripe),
+    shoots with gallery actions, catalog CRUD (packages + portfolio), studio
+    profile form with publish toggle, clients, galleries (upload, delete, signed
+    share link), favorites, my reviews (edit/delete), payments (Connect
+    onboarding, Pro upgrade, history)
+  - `gallery.html`: public share-link viewer (login to download);
+    `payment-result.html`: Stripe success/cancel return pages
+  - Owner-only `PATCH /api/profiles/{slug}/`; `?unread=1` on notifications;
+  - Registering a photographer auto-creates an unpublished profile
+    demo data via `manage.py seed_demo`
+- Next: live deploy (docs/DEPLOY.md), Docker (user), real SMTP for production
+  emails, CI.
 
 ## Conventions
 - Each app owns its models, serializers, views, urls and tests.

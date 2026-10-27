@@ -125,6 +125,50 @@ suite after each step.
   Cloudinary for storage, structure includes `notifications`/`reviews`/
   `frontend`/`docs` (257)
 
+## Web frontend complete (2026-10-26)
+
+- Shared `frontend/js/common.js`: auth header wiring, silent JWT refresh on
+  401, JSON/error helpers, toasts, star ratings, session helpers (272)
+- Marketplace: sign-up form with role picker (auto sign-in after register),
+  search by city and specialty with `?city=`/`?specialty=` (272)
+- Public profile: reviews section with average rating and "Write a review"
+  modal for customers (eligibility errors from the API shown inline) (272)
+- Dashboard: tabbed by role — overview, notifications (unread badge,
+  mark read / mark all read), booking requests (accept, reject, pay deposit
+  → Stripe checkout), shoots with gallery actions, catalog CRUD (packages and
+  portfolio photos), studio profile form with publish toggle, clients,
+  galleries (upload photos, delete, signed share link + copy), favorites,
+  my reviews (edit/delete), payments (Connect onboarding, Pro upgrade,
+  history) (272)
+- Backend support: owner-only `PATCH /api/profiles/{slug}/` (create/delete
+  stay 405), `user_id` + `is_published` in the profile payload, photographers
+  list their own unpublished catalog items, `/api/auth/me/` returns
+  `bio`/`phone`, `?unread=1` notification filter (272)
+- Registering a photographer now auto-creates their unpublished profile (studio name = username, stable slug), so the studio panel works from the first login (272)
+- `gallery.html` public share viewer (login required to download) and
+  `payment-result.html` for the Stripe success/cancel return URLs (272)
+
+## Payments flow and settings (2026-10-26)
+
+- Deposits (20%) and balances (80%): accepting starts
+  `accepted_pending_deposit` with a 48 h deadline — Celery auto-cancels
+  expired bookings and notifies both parties; `Shoot.booking` backfilled for
+  legacy accepts; balance checkout requires a confirmed booking with its
+  gallery (322)
+- `settle_payment` shared by webhook and success page, with
+  `POST /api/payments/confirm-session/` fallback when no webhook secret is
+  configured; deposit paid flips the booking to `confirmed` (322)
+- Gallery paywall: customers get 403 on the original download and a masked
+  preview until deposit + balance are paid; the photographer always has
+  full quality (322)
+- Dashboard: dynamic payments summary (pending count + total received/paid),
+  customer deposit/balance buttons, red "Attention!" banner when the
+  photographer is not onboarded plus one unread notification per blocked
+  checkout attempt (322)
+- Settings tab (was Profile, placed after Payments) with Public Profile /
+  Account Details / Billing sections — Connect Stripe button, Upgrade to
+  Pro hidden once the plan is Pro (322)
+
 ## Next
 
 - Live deploy: create the Railway project and follow `docs/DEPLOY.md` (user)

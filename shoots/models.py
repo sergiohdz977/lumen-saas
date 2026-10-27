@@ -8,7 +8,14 @@ class Shoot(models.Model):
 
     client = models.ForeignKey(
         "clients.Client", on_delete=models.CASCADE, related_name="shoots"
-        )
+    )
+    booking = models.OneToOneField(
+        "bookings.BookingRequest",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="shoot",
+    )
     title = models.CharField(max_length=150)
     shoot_type = models.CharField(max_length=50)
     date = models.DateTimeField()

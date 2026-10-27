@@ -1,7 +1,9 @@
-from datetime import datetime, timezone as dt_timezone
+﻿from datetime import datetime, timedelta, timezone as dt_timezone
+from unittest.mock import patch
 
 from django.core import mail
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework import status
 
@@ -10,6 +12,7 @@ from profiles.models import Package, PhotographerProfile
 from shoots.models import Shoot
 from users.models import User
 from .models import BookingRequest
+from .tasks import enforce_deposit_deadline
 
 
 class BookingEndpointsTests(TestCase):
@@ -169,9 +172,15 @@ class BookingEndpointsTests(TestCase):
             f"/api/bookings/{self.pending_booking.pk}/accept/", format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["status"], "accepted")
+        self.assertEqual(
+            response.data["status"], "accepted_pending_deposit"
+        )
         self.pending_booking.refresh_from_db()
-        self.assertEqual(self.pending_booking.status, BookingRequest.Status.ACCEPTED)
+        self.assertEqual(
+            self.pending_booking.status,
+            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
+        )
+        self.assertIsNotNone(self.pending_booking.deposit_deadline)
 
     def test_photographer_rejects_pending_booking(self):
         self.api.force_authenticate(self.ana)
@@ -270,7 +279,11 @@ class AcceptSideEffectsTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.booking.refresh_from_db()
-        self.assertEqual(self.booking.status, BookingRequest.Status.ACCEPTED)
+        self.assertEqual(
+            self.booking.status,
+            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
+        )
+        self.assertIsNotNone(self.booking.deposit_deadline)
         client = Client.objects.get(photographer=self.ana)
         self.assertEqual(client.user, self.customer)
         self.assertEqual(client.email, self.customer.email)
@@ -280,6 +293,7 @@ class AcceptSideEffectsTests(TestCase):
         self.assertEqual(shoot.status, Shoot.Status.BOOKED)
         self.assertEqual(shoot.date, self.booking.date)
         self.assertEqual(shoot.shoot_type, "Boda completa")
+        self.assertEqual(shoot.booking, self.booking)
 
     def test_accept_reuses_client_for_same_customer(self):
         second_package = Package.objects.create(
@@ -412,9 +426,12 @@ class MarketplaceJourneyTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         ana = User.objects.get(username="ana")
 
-        PhotographerProfile.objects.create(
-            user=ana, studio_name="Ana Studio", is_published=True
-        )
+        # Registering a photographer auto-creates an unpublished profile.
+        profile = PhotographerProfile.objects.get(user=ana)
+        profile.studio_name = "Ana Studio"
+        profile.slug = "ana-studio"
+        profile.is_published = True
+        profile.save()
 
         self.api.force_authenticate(ana)
         response = self.api.post(
@@ -463,7 +480,7 @@ class MarketplaceJourneyTests(TestCase):
         response = self.api.post(
             f"/api/bookings/{booking_id}/accept/", format="json"
         )
-        self.assertEqual(response.data["status"], "accepted")
+        self.assertEqual(response.data["status"], "accepted_pending_deposit")
 
         shoot = Shoot.objects.get()
         self.assertEqual(shoot.status, Shoot.Status.BOOKED)
@@ -537,7 +554,7 @@ class MarketplaceJourneyTests(TestCase):
         response = self.api.post(
             f"/api/bookings/{retry_id}/accept/", format="json"
         )
-        self.assertEqual(response.data["status"], "accepted")
+        self.assertEqual(response.data["status"], "accepted_pending_deposit")
         self.assertEqual(Shoot.objects.count(), 1)
         self.assertEqual(Client.objects.count(), 1)
 
@@ -703,3 +720,117 @@ class BookingNotificationTests(TestCase):
         self.assertEqual(notification.title, "New booking request")
         self.assertIn("maria", notification.message)
         self.assertIn("Boda completa", notification.message)
+
+
+class DepositDeadlineTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.customer = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.ana_profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+            is_published=True,
+        )
+        cls.package = Package.objects.create(
+            profile=cls.ana_profile,
+            title="Boda completa",
+            price=200,
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+        self.booking = BookingRequest.objects.create(
+            customer=self.customer,
+            package=self.package,
+            date=datetime(2026, 11, 20, 10, 0, tzinfo=dt_timezone.utc),
+        )
+
+    def test_accept_schedules_deadline_task_with_eta(self):
+        self.api.force_authenticate(self.ana)
+        with patch(
+            "bookings.views.enforce_deposit_deadline.apply_async"
+        ) as scheduled:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.api.post(
+                    f"/api/bookings/{self.booking.pk}/accept/",
+                    format="json",
+                )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        scheduled.assert_called_once()
+        args, kwargs = scheduled.call_args
+        self.assertEqual(args[0], (self.booking.pk,))
+        self.booking.refresh_from_db()
+        self.assertEqual(kwargs["eta"], self.booking.deposit_deadline)
+
+    def _make_accepted(self, deadline):
+        self.booking.status = BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT
+        self.booking.deposit_deadline = deadline
+        self.booking.save(update_fields=["status", "deposit_deadline"])
+        client, _ = Client.objects.get_or_create(
+            photographer=self.ana,
+            user=self.customer,
+            defaults={"name": "Maria F", "email": "", "phone": ""},
+        )
+        return Shoot.objects.create(
+            client=client,
+            title="Boda completa - maria",
+            shoot_type="boda",
+            date=self.booking.date,
+            booking=self.booking,
+        )
+
+    def test_expired_deadline_cancels_booking_and_deletes_shoot(self):
+        from notifications.models import Notification
+
+        shoot = self._make_accepted(timezone.now() - timedelta(hours=1))
+        result = enforce_deposit_deadline(self.booking.pk)
+        self.booking.refresh_from_db()
+        self.assertEqual(
+            self.booking.status, BookingRequest.Status.CANCELLED
+        )
+        self.assertEqual(result, self.booking.pk)
+        self.assertFalse(Shoot.objects.filter(pk=shoot.pk).exists())
+        cancelled = Notification.objects.filter(title="Booking cancelled")
+        self.assertEqual(cancelled.count(), 2)
+        recipients = set(cancelled.values_list("user", flat=True))
+        self.assertEqual(recipients, {self.ana.pk, self.customer.pk})
+
+    def test_future_deadline_keeps_booking(self):
+        shoot = self._make_accepted(timezone.now() + timedelta(hours=48))
+        enforce_deposit_deadline(self.booking.pk)
+        self.booking.refresh_from_db()
+        self.assertEqual(
+            self.booking.status,
+            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
+        )
+        self.assertTrue(Shoot.objects.filter(pk=shoot.pk).exists())
+
+    def test_confirmed_booking_is_not_cancelled(self):
+        shoot = self._make_accepted(timezone.now() - timedelta(hours=1))
+        BookingRequest.objects.filter(pk=self.booking.pk).update(
+            status=BookingRequest.Status.CONFIRMED
+        )
+        enforce_deposit_deadline(self.booking.pk)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.status, BookingRequest.Status.CONFIRMED)
+        self.assertTrue(Shoot.objects.filter(pk=shoot.pk).exists())
+
+    def test_legacy_accepted_without_deadline_is_kept(self):
+        self.booking.status = BookingRequest.Status.ACCEPTED
+        self.booking.deposit_deadline = None
+        self.booking.save(update_fields=["status", "deposit_deadline"])
+        enforce_deposit_deadline(self.booking.pk)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.status, BookingRequest.Status.ACCEPTED)
