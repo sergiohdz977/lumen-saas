@@ -7,5 +7,11 @@ db.sqlite3
 /media/
 /staticfiles/
 
-# Local run/demo scripts (machine-specific paths).
+# Local scripts (machine-specific paths); only the demo launcher is shared.
 *.bat
+!arrancar-demo.bat
+
+# Local Docker scaffolding (postponed until deploy, see CHANGELOG step 19).
+Dockerfile
+docker-compose.yml
+.dockerignore
