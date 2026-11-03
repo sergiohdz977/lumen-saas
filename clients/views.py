@@ -13,4 +13,4 @@ class ClientViewSet(viewsets.ModelViewSet):
         return Client.objects.filter(photographer=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(photographer=self.request.user)
+        serializer.save(photographer=self.request.user, is_manual=True)

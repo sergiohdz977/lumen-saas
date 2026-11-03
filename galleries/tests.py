@@ -775,6 +775,8 @@ class FavoritesTests(TestCase):
         self.assertEqual(notification.title, "New favorite")
         self.assertIn("maria", notification.message)
         self.assertIn("Boda de Maria", notification.message)
+        self.assertIn("gallery.html?token=", notification.link)
+        self.assertIn(f"photo={self.photo_ana.pk}", notification.link)
 
     def test_favorite_notification_is_not_sent_to_the_customer(self):
         self.api.force_authenticate(self.maria)
@@ -1250,7 +1252,7 @@ class PaymentGateTests(TestCase):
             customer=cls.maria,
             package=cls.package,
             date="2026-11-20T10:00:00Z",
-            status=BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
+            status=BookingRequest.Status.AWAITING_PAYMENT,
         )
         cls.shoot_ana = Shoot.objects.create(
             client=cls.client_maria,
@@ -1346,7 +1348,7 @@ class PaymentGateTests(TestCase):
         response = self.api.get(f"/api/galleries/{self.gallery_ana.pk}/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            response.data["booking_status"], "accepted_pending_deposit"
+            response.data["booking_status"], "awaiting_payment"
         )
         self.assertFalse(response.data["fully_paid"])
 

@@ -173,6 +173,9 @@ class FavoriteViewSet(viewsets.ModelViewSet):
         favorite = serializer.save(user=self.request.user)
         owner = favorite.photo.gallery.shoot.client.photographer
         if owner and owner.pk != self.request.user.pk:
+            token = signing.dumps(
+                str(favorite.photo.gallery_id), salt=SHARE_SALT
+            )
             notify(
                 owner,
                 "New favorite",
@@ -180,4 +183,5 @@ class FavoriteViewSet(viewsets.ModelViewSet):
                     f"{self.request.user.username} favorited a photo from "
                     f"'{favorite.photo.gallery.shoot.title}'."
                 ),
+                link=f"gallery.html?token={token}&photo={favorite.photo_id}",
             )

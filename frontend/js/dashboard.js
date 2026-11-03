@@ -25,8 +25,25 @@ let reviewsForOverview = [];
 let paymentsByBooking = new Map();
 let favoritesByPhoto = new Map();
 let catalogPackages = [];
+let catalogCollections = [];
+let portfolioItems = [];
+let activeCollectionFilter = "all"; // "all" | "none" | collection id
+let portfolioPreviewPhotos = []; // photos listed in the Portfolio tab, in view order
+let portfolioPreviewIndex = 0;
 let editingReviewId = null;
 let currentGalleryPaid = true;
+let activeRequestId = null; // booking open in the slide-in drawer
+let chatPollTimer = null;
+let pendingOpenRequest = null; // booking to open once the list loads
+let requestFilter = "all"; // all | pending | accepted
+let lastRequestsData = null;
+let lastRequestsRole = "";
+const REQUEST_FILTERS = {
+  all: () => true,
+  pending: (booking) =>
+    ["requested", "awaiting_payment"].includes(booking.status),
+  accepted: (booking) => booking.status === "accepted",
+};
 
 const HIGH_RES_LOCKED =
   "Complete the payment to download photos in high quality.";
@@ -41,9 +58,86 @@ function showDash() {
   dash.hidden = false;
 }
 
+const JOB_VIEWS = ["requests", "shoots", "galleries"];
+let lastJobView = "requests";
+
+/* Settings sub-tabs: Public profile / Account / Billing / Studio / Clients.
+   Sections only show when allowed for the role AND their tab is active. */
+const SETTINGS_TABS = {
+  public: ["pp-section", "profile-studio"],
+  account: ["account-section"],
+  billing: ["billing-section"],
+  studio: ["studio-settings"],
+  clients: ["clients-settings"],
+};
+let activeSettingsTab = "public";
+
+function setSettingsSection(id, allowed) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.dataset.allowed = allowed ? "true" : "false";
+  }
+}
+
+function applySettingsTab() {
+  const available = (key) =>
+    (SETTINGS_TABS[key] || []).some((id) => {
+      const el = document.getElementById(id);
+      return el && el.dataset.allowed === "true";
+    });
+  if (!available(activeSettingsTab)) {
+    const fallback = Object.keys(SETTINGS_TABS).find(available);
+    if (fallback) {
+      activeSettingsTab = fallback;
+    }
+  }
+  Object.entries(SETTINGS_TABS).forEach(([key, ids]) => {
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.hidden = !(key === activeSettingsTab && el.dataset.allowed === "true");
+      }
+    });
+  });
+  document.querySelectorAll("#settings-bar .sub-tab").forEach((btn) => {
+    const key = btn.dataset.subtab;
+    btn.hidden = !available(key);
+    btn.classList.toggle("is-active", key === activeSettingsTab);
+  });
+}
+
+function activateSettingsTab(key) {
+  activeSettingsTab = SETTINGS_TABS[key] ? key : "public";
+  applySettingsTab();
+  if (activeSettingsTab === "clients") {
+    // Refresh on every visit so new bookings show up automatically.
+    loadClients();
+  }
+}
+
+function visibleJobViews() {
+  return JOB_VIEWS.filter((view) => {
+    const panel = document.querySelector(`.tab-panel[data-panel="${view}"]`);
+    return (
+      !panel ||
+      !panel.dataset.roles ||
+      panel.dataset.roles.split(" ").includes(myRole)
+    );
+  });
+}
+
 function activateTab(name) {
+  if (name === "jobs") {
+    const views = visibleJobViews();
+    name = views.includes(lastJobView) ? lastJobView : views[0] || "requests";
+  }
+  const inJobs = JOB_VIEWS.includes(name);
+  if (inJobs) {
+    lastJobView = name;
+  }
+  const mainKey = inJobs ? "jobs" : name;
   document.querySelectorAll("#dash-tabs .tab").forEach((tab) => {
-    tab.classList.toggle("is-active", tab.dataset.tab === name);
+    tab.classList.toggle("is-active", tab.dataset.tab === mainKey);
   });
   document.querySelectorAll(".tab-panel").forEach((panel) => {
     panel.hidden =
@@ -51,31 +145,190 @@ function activateTab(name) {
       (panel.dataset.roles &&
         !panel.dataset.roles.split(" ").includes(myRole));
   });
+  const jobsBar = document.getElementById("jobs-bar");
+  if (jobsBar) {
+    jobsBar.hidden = !inJobs;
+    jobsBar.querySelectorAll(".sub-tab").forEach((btn) => {
+      btn.hidden = Boolean(
+        btn.dataset.roles && !btn.dataset.roles.split(" ").includes(myRole)
+      );
+      btn.classList.toggle("is-active", btn.dataset.view === name);
+    });
+  }
+  if (name === "profile") {
+    // Opening Settings always starts on "Public profile".
+    activateSettingsTab("public");
+  }
+  if (name !== "requests" && activeRequestId) {
+    // The drawer lives inside the requests view: leaving it closes the drawer.
+    closeRequestDetail();
+  }
+  if (name === "notifications") {
+    // Viewing the notifications clears every unread badge.
+    markAllNotificationsRead();
+  }
 }
+
+function markAllNotificationsRead() {
+  apiFetch("/notifications/read-all/", { method: "POST" })
+    .catch(() => null)
+    .then(() => {
+      loadNotifications();
+      refreshBellBadge();
+    });
+}
+
+/* Deep links between dashboard tabs must not reload the page.
+   `item` marks the row the notification is about (slight highlight).
+   Gallery links still navigate for real. */
+let pendingHighlight = null; // { tab, id }
+
+function applyPendingHighlight(list, tab) {
+  if (!pendingHighlight || pendingHighlight.tab !== tab || !list) {
+    return;
+  }
+  const target = list.querySelector(
+    `[data-highlight-id="${pendingHighlight.id}"]`
+  );
+  if (target) {
+    target.classList.add("row-highlight");
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    pendingHighlight = null;
+  }
+}
+
+function finishPendingHighlight() {
+  applyPendingHighlight(
+    document.getElementById("requests-list"),
+    "requests"
+  );
+  applyPendingHighlight(document.getElementById("payments-list"), "payments");
+  applyPendingHighlight(document.getElementById("pkg-list"), "packages");
+}
+
+window.lumenNavigate = function (href) {
+  if (href && href.startsWith("dashboard.html")) {
+    const query = new URLSearchParams(href.split("?")[1] || "");
+    const tab = query.get("tab");
+    if (tab) {
+      const item = query.get("item");
+      pendingHighlight = item ? { tab, id: item } : null;
+      pendingOpenRequest = tab === "requests" && item ? item : null;
+      activateTab(tab);
+      window.history.replaceState(
+        {},
+        "",
+        `?tab=${tab}${item ? `&item=${item}` : ""}`
+      );
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (tab === "requests") {
+        loadRequests().then(finishPendingHighlight);
+      } else if (tab === "payments") {
+        loadPayments().then(finishPendingHighlight);
+      } else if (tab === "packages") {
+        loadCatalog().then(finishPendingHighlight);
+      } else {
+        finishPendingHighlight();
+      }
+      return;
+    }
+  }
+  window.location.href = href;
+};
 
 function setupTabs() {
   document.querySelectorAll("#dash-tabs .tab").forEach((tab) => {
-    if (tab.dataset.roles && !tab.dataset.roles.split(" ").includes(myRole)) {
-      tab.hidden = true;
-    }
+    // Tabs are authored hidden when role-gated: unhide them for the right role.
+    tab.hidden = Boolean(
+      tab.dataset.roles && !tab.dataset.roles.split(" ").includes(myRole)
+    );
     tab.addEventListener("click", () => activateTab(tab.dataset.tab));
+  });
+  document.querySelectorAll("#jobs-bar .sub-tab").forEach((btn) => {
+    btn.addEventListener("click", () => activateTab(btn.dataset.view));
+  });
+  document.querySelectorAll("#settings-bar .sub-tab").forEach((btn) => {
+    btn.addEventListener("click", () => activateSettingsTab(btn.dataset.subtab));
   });
   const visible = [...document.querySelectorAll("#dash-tabs .tab")].filter(
     (tab) => !tab.hidden
   );
-  const requested = new URLSearchParams(window.location.search).get("tab");
-  const requestedTab = visible.find((tab) => tab.dataset.tab === requested);
-  const first = requestedTab || visible[0];
-  activateTab(first ? first.dataset.tab : "overview");
+  const query = new URLSearchParams(window.location.search);
+  const requested = query.get("tab");
+  const requestedItem = query.get("item");
+  if (requestedItem) {
+    pendingHighlight = { tab: requested, id: requestedItem };
+    if (requested === "requests") {
+      pendingOpenRequest = requestedItem;
+    }
+  }
+  let target = requested;
+  const known = visible.some((tab) => tab.dataset.tab === requested);
+  if (!target || (!known && !JOB_VIEWS.includes(target) && target !== "jobs")) {
+    target = visible[0] ? visible[0].dataset.tab : "overview";
+  }
+  activateTab(target);
+}
+
+function refreshDirtySaves() {
+  const profile = me && me.profile;
+  const ppfSave = document.getElementById("ppf-save");
+  if (ppfSave) {
+    const dirty = Boolean(profile) &&
+      (document.getElementById("ppf-studio").value.trim() !==
+        (profile.studio_name || "").trim() ||
+        document.getElementById("ppf-city").value.trim() !==
+        (profile.city || "").trim() ||
+        document.getElementById("ppf-published").checked !==
+        Boolean(profile.is_published));
+    ppfSave.hidden = !dirty;
+  }
+  const accSave = document.getElementById("acc-save");
+  if (accSave && me) {
+    accSave.hidden = !(
+      document.getElementById("acc-email").value.trim() !==
+        (me.email || "") ||
+      document.getElementById("acc-username").value.trim() !==
+        (me.username || "")
+    );
+  }
+  const stSave = document.getElementById("st-save");
+  if (stSave) {
+    stSave.hidden = !(
+      profile &&
+      (document.getElementById("st-studio").value !==
+        (profile.studio_name || "") ||
+        document.getElementById("st-city").value !==
+          (profile.city || "") ||
+        document.getElementById("st-specialties").value !==
+          (profile.specialties || "") ||
+        document.getElementById("st-phone").value !==
+          (profile.phone || "") ||
+        document.getElementById("st-bio").value !==
+          (profile.bio || "") ||
+        document.getElementById("st-experience").value !==
+          (profile.years_experience != null
+            ? String(profile.years_experience)
+            : "") ||
+        document.getElementById("st-languages").value !==
+          (profile.languages || "") ||
+        document.getElementById("st-equipment").value !==
+          (profile.equipment || "") ||
+        document.getElementById("st-published").checked !==
+          Boolean(profile.is_published))
+    );
+  }
 }
 
 function renderMe() {
-  document.getElementById("me-username").textContent = me.username;
-  document.getElementById("me-email").textContent = me.email;
+  if (me && me.profile && isDemoStripeConnected()) {
+    me.profile.stripe_connected = true;
+  }
+  document.getElementById("acc-username").value = me.username;
+  document.getElementById("acc-email").value = me.email;
   document.getElementById("me-role").textContent = me.role;
   document.getElementById("btn-new-gallery").hidden = me.role !== "photographer";
-  document.getElementById("billing-section").hidden =
-    me.role !== "photographer";
+  setSettingsSection("billing-section", me.role === "photographer");
 
   const publicBtn = document.getElementById("btn-view-public");
   const canShowPublic =
@@ -87,20 +340,35 @@ function renderMe() {
   renderOverview();
 
   if (me.role !== "photographer" || !me.profile) {
+    setSettingsSection("pp-section", false);
+    setSettingsSection("profile-studio", false);
+    setSettingsSection("studio-settings", false);
+    setSettingsSection("clients-settings", false);
+    applySettingsTab();
+    refreshDirtySaves();
     return;
   }
   const profile = me.profile;
-  document.getElementById("profile-studio").hidden = false;
-  document.getElementById("me-studio").textContent = profile.studio_name || "—";
-  document.getElementById("me-city").textContent = profile.city || "—";
+  setSettingsSection("pp-section", true);
+  renderProfilePicture();
+  setSettingsSection("profile-studio", true);
+  setSettingsSection("studio-settings", true);
+  setSettingsSection("clients-settings", true);
+  document.getElementById("ppf-studio").value = profile.studio_name || "";
+  document.getElementById("ppf-city").value = profile.city || "";
+  document.getElementById("ppf-published").checked = Boolean(
+    profile.is_published
+  );
   document.getElementById("me-plan").textContent = profile.plan;
-  document.getElementById("me-published").textContent = profile.is_published
-    ? "Yes"
-    : "No";
   const stripeConnected = Boolean(profile.stripe_connected);
-  document.getElementById("me-stripe").textContent = stripeConnected
-    ? "Connected"
+  const stripeDemo = stripeConnected && isDemoStripeConnected();
+  const meStripe = document.getElementById("me-stripe");
+  meStripe.textContent = stripeConnected
+    ? stripeDemo
+      ? "Connected (Demo Mode)"
+      : "Connected"
     : "Not connected";
+  meStripe.classList.toggle("stripe-demo", stripeDemo);
   document.getElementById("btn-connect-stripe").hidden = stripeConnected;
   document.getElementById("pro-upgrade").hidden = profile.plan === "pro";
   const publicUrl = `profile.html?slug=${encodeURIComponent(profile.slug)}`;
@@ -119,14 +387,372 @@ function renderMe() {
   document.getElementById("st-specialties").value = profile.specialties || "";
   document.getElementById("st-phone").value = profile.phone || "";
   document.getElementById("st-bio").value = profile.bio || "";
+  document.getElementById("st-experience").value =
+    profile.years_experience != null ? profile.years_experience : "";
+  document.getElementById("st-languages").value = profile.languages || "";
+  document.getElementById("st-equipment").value = profile.equipment || "";
   document.getElementById("st-published").checked = Boolean(
     profile.is_published
   );
+  renderCoverPreview();
+  applySettingsTab();
+  refreshDirtySaves();
 }
 
 /* ---------------------------- overview cards ---------------------------- */
 
+function renderProfilePicture() {
+  const preview = document.getElementById("pp-preview");
+  const url = me.profile && me.profile.profile_picture;
+  const name =
+    (me.profile && me.profile.studio_name) || (me && me.username) || "?";
+  const initial = name.charAt(0).toUpperCase();
+  preview.innerHTML = url
+    ? `<img class="pp-img" src="${escapeHtml(
+        url
+      )}" alt="${escapeHtml(name)}">`
+    : `<div class="pp-img pp-img--empty">${escapeHtml(initial)}</div>`;
+  preview.classList.toggle("pp-preview--clickable", Boolean(url));
+  if (url) {
+    preview.setAttribute("role", "button");
+    preview.setAttribute("tabindex", "0");
+    preview.setAttribute("aria-label", "View profile picture");
+  } else {
+    preview.removeAttribute("role");
+    preview.removeAttribute("tabindex");
+    preview.removeAttribute("aria-label");
+  }
+}
+
+const cropState = {
+  scale: 1,
+  minScale: 1,
+  tx: 0,
+  ty: 0,
+  rotation: 0,
+  objectUrl: null,
+};
+
+function cropStageSize() {
+  const stage = document.getElementById("crop-stage");
+  return stage.clientWidth || 300;
+}
+
+function cropRotatedDims() {
+  const img = document.getElementById("crop-img");
+  const swapped = (cropState.rotation / 90) % 2 !== 0;
+  return swapped
+    ? { w: img.naturalHeight, h: img.naturalWidth }
+    : { w: img.naturalWidth, h: img.naturalHeight };
+}
+
+function cropMinScale() {
+  const { w, h } = cropRotatedDims();
+  const size = cropStageSize();
+  return Math.max(size / w, size / h);
+}
+
+function clampCrop() {
+  const size = cropStageSize();
+  const { w, h } = cropRotatedDims();
+  const maxX = Math.max(0, (w * cropState.scale - size) / 2);
+  const maxY = Math.max(0, (h * cropState.scale - size) / 2);
+  cropState.tx = Math.min(maxX, Math.max(-maxX, cropState.tx));
+  cropState.ty = Math.min(maxY, Math.max(-maxY, cropState.ty));
+}
+
+function renderCrop() {
+  const img = document.getElementById("crop-img");
+  clampCrop();
+  img.style.transform =
+    `translate(-50%, -50%) translate(${cropState.tx}px, ${cropState.ty}px)` +
+    ` rotate(${cropState.rotation}deg) scale(${cropState.scale})`;
+}
+
+function resetCrop(resetRotation) {
+  if (resetRotation) {
+    cropState.rotation = 0;
+  }
+  cropState.minScale = cropMinScale();
+  cropState.scale = cropState.minScale;
+  cropState.tx = 0;
+  cropState.ty = 0;
+  document.getElementById("crop-zoom").value = "1";
+  renderCrop();
+}
+
+function closeCropModal() {
+  document.getElementById("pp-crop-modal").hidden = true;
+  if (cropState.objectUrl) {
+    URL.revokeObjectURL(cropState.objectUrl);
+    cropState.objectUrl = null;
+  }
+  document.getElementById("crop-img").removeAttribute("src");
+}
+
+function openCropModal(file) {
+  const img = document.getElementById("crop-img");
+  if (cropState.objectUrl) {
+    URL.revokeObjectURL(cropState.objectUrl);
+  }
+  cropState.objectUrl = URL.createObjectURL(file);
+  img.onload = () => {
+    resetCrop(true);
+    document.getElementById("pp-crop-modal").hidden = false;
+  };
+  img.onerror = () => {
+    closeCropModal();
+    showToast("Could not read that image.");
+  };
+  img.src = cropState.objectUrl;
+}
+
+function buildCroppedFile() {
+  const img = document.getElementById("crop-img");
+  const out = 512;
+  const size = cropStageSize();
+  const canvas = document.createElement("canvas");
+  canvas.width = out;
+  canvas.height = out;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, out, out);
+  ctx.save();
+  ctx.translate(out / 2, out / 2);
+  ctx.scale(out / size, out / size);
+  ctx.translate(cropState.tx, cropState.ty);
+  ctx.rotate((cropState.rotation * Math.PI) / 180);
+  ctx.scale(cropState.scale, cropState.scale);
+  ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+  ctx.restore();
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Crop failed"));
+          return;
+        }
+        resolve(
+          new File([blob], "profile-picture.jpg", {
+            type: "image/jpeg",
+          })
+        );
+      },
+      "image/jpeg",
+      0.92
+    );
+  });
+}
+
+async function uploadProfilePicture(file) {
+  const form = new FormData();
+  form.append("profile_picture", file);
+  const response = await apiFetch("/profiles/picture/", {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) {
+    showToast(await readError(response));
+    return false;
+  }
+  const data = await response.json();
+  me.profile = { ...me.profile, profile_picture: data.profile_picture };
+  renderProfilePicture();
+  showToast("Profile picture updated.");
+  return true;
+}
+
+function wireProfilePictureUpload() {
+  const button = document.getElementById("btn-upload-pp");
+  const input = document.getElementById("pp-file");
+  const zoom = document.getElementById("crop-zoom");
+  const stage = document.getElementById("crop-stage");
+
+  button.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => {
+    const file = input.files && input.files[0];
+    input.value = "";
+    if (!file) {
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showToast("Image must be 2 MB or smaller.");
+      return;
+    }
+    if (!file.type || !file.type.startsWith("image/")) {
+      showToast("Please choose an image file.");
+      return;
+    }
+    openCropModal(file);
+  });
+
+  document
+    .getElementById("pp-crop-close")
+    .addEventListener("click", closeCropModal);
+  document
+    .getElementById("crop-cancel")
+    .addEventListener("click", closeCropModal);
+
+  zoom.addEventListener("input", () => {
+    cropState.scale = cropState.minScale * Number(zoom.value);
+    renderCrop();
+  });
+  document.getElementById("crop-zoom-in").addEventListener("click", () => {
+    zoom.value = String(Math.min(4, Number(zoom.value) + 0.15));
+    zoom.dispatchEvent(new Event("input"));
+  });
+  document.getElementById("crop-zoom-out").addEventListener("click", () => {
+    zoom.value = String(Math.max(1, Number(zoom.value) - 0.15));
+    zoom.dispatchEvent(new Event("input"));
+  });
+  document.getElementById("crop-rotate").addEventListener("click", () => {
+    cropState.rotation = (cropState.rotation + 90) % 360;
+    resetCrop(false);
+  });
+  document
+    .getElementById("crop-reset")
+    .addEventListener("click", () => resetCrop(true));
+
+  let drag = null;
+  stage.addEventListener("pointerdown", (event) => {
+    drag = { x: event.clientX, y: event.clientY };
+    stage.setPointerCapture(event.pointerId);
+  });
+  stage.addEventListener("pointermove", (event) => {
+    if (!drag) {
+      return;
+    }
+    cropState.tx += event.clientX - drag.x;
+    cropState.ty += event.clientY - drag.y;
+    drag = { x: event.clientX, y: event.clientY };
+    renderCrop();
+  });
+  stage.addEventListener("pointerup", () => {
+    drag = null;
+  });
+  stage.addEventListener("pointercancel", () => {
+    drag = null;
+  });
+
+  const preview = document.getElementById("pp-preview");
+  const viewer = document.getElementById("pp-viewer-modal");
+  const viewerImg = document.getElementById("pp-viewer-img");
+
+  function openViewer() {
+    const url = me.profile && me.profile.profile_picture;
+    if (!url) {
+      return;
+    }
+    viewerImg.src = url;
+    viewer.hidden = false;
+  }
+
+  function closeViewer() {
+    viewer.hidden = true;
+    viewerImg.removeAttribute("src");
+  }
+
+  preview.addEventListener("click", openViewer);
+  preview.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openViewer();
+    }
+  });
+  document
+    .getElementById("pp-viewer-close")
+    .addEventListener("click", closeViewer);
+  viewer.addEventListener("click", (event) => {
+    if (event.target === viewer) {
+      closeViewer();
+    }
+  });
+
+  document
+    .getElementById("pp-viewer-replace")
+    .addEventListener("click", () => {
+      closeViewer();
+      input.click();
+    });
+
+  document
+    .getElementById("pp-viewer-remove")
+    .addEventListener("click", async () => {
+      if (!confirm("Remove your profile picture?")) {
+        return;
+      }
+      try {
+        const response = await apiFetch("/profiles/picture/", {
+          method: "DELETE",
+        });
+        if (!response.ok) {
+          showToast(await readError(response));
+          return;
+        }
+        me.profile = { ...me.profile, profile_picture: null };
+        renderProfilePicture();
+        closeViewer();
+        showToast("Profile picture removed.");
+      } catch (error) {
+        console.error(error);
+        showToast("Could not remove the photo. Try again.");
+      }
+    });
+
+  document
+    .getElementById("crop-upload")
+    .addEventListener("click", async () => {
+      const uploadButton = document.getElementById("crop-upload");
+      uploadButton.disabled = true;
+      try {
+        const file = await buildCroppedFile();
+        const done = await uploadProfilePicture(file);
+        if (done) {
+          closeCropModal();
+        }
+      } catch (error) {
+        console.error(error);
+        showToast("Crop failed. Try another photo.");
+      } finally {
+        uploadButton.disabled = false;
+      }
+    });
+}
+
+const DEMO_CONNECT_KEY = "stripe_demo_connected";
+
+function isDemoStripeConnected() {
+  try {
+    return localStorage.getItem(DEMO_CONNECT_KEY) === "true";
+  } catch (error) {
+    return false;
+  }
+}
+
+function demoConnectStripe() {
+  showToast("Connecting to Stripe...");
+  window.setTimeout(() => {
+    try {
+      localStorage.setItem(DEMO_CONNECT_KEY, "true");
+    } catch (error) {
+      console.error(error);
+    }
+    if (me && me.profile) {
+      me.profile.stripe_connected = true;
+    }
+    renderMe();
+    renderPaymentActions();
+    updateStripeAlert();
+    showToast("Stripe connected (Demo Mode).");
+  }, 1500);
+}
+
 function startOnboard() {
+  // SIMULACIÓN FRONTEND: El código real de onboarding está en payments/services.py (start_onboarding).
+  if (STRIPE_DEMO_MODE) {
+    demoConnectStripe();
+    return;
+  }
   const country = document.getElementById("onboard-country");
   apiFetch("/payments/onboard/", {
     method: "POST",
@@ -156,7 +782,7 @@ function updateStripeAlert() {
     myRole === "photographer" &&
     !connected &&
     bookingsForOverview.some((booking) =>
-      ["accepted", "accepted_pending_deposit"].includes(booking.status)
+      ["awaiting_payment"].includes(booking.status)
     );
   alertBox.hidden = !moneyWaiting;
 }
@@ -182,12 +808,20 @@ function renderOverview() {
       })
       .reduce((sum, payment) => sum + Number(payment.amount_cents || 0), 0);
     const pending = bookingsForOverview.filter(
-      (booking) => booking.status === "pending"
+      (booking) => booking.status === "requested"
     ).length;
     const emptyGalleries = galleriesForOverview.filter(
       (gallery) => !gallery.photo_count
     ).length;
     const connected = Boolean(me.profile && me.profile.stripe_connected);
+    const stripeDemo = connected && isDemoStripeConnected();
+    const ratingCount = reviewsForOverview.length;
+    const ratingAvg = ratingCount
+      ? reviewsForOverview.reduce(
+          (sum, review) => sum + Number(review.rating || 0),
+          0
+        ) / ratingCount
+      : 0;
     cards.push(
       {
         tab: "payments",
@@ -201,8 +835,11 @@ function renderOverview() {
         ? {
             tab: "payments",
             title: "Stripe status",
-            value: "Connected",
-            hint: "Deposits go straight to your account",
+            value: stripeDemo ? "Connected (Demo Mode)" : "Connected",
+            hint: stripeDemo
+              ? "Simulated for the demo"
+              : "Deposits go straight to your account",
+            ok: stripeDemo,
           }
         : {
             tab: "payments",
@@ -221,6 +858,13 @@ function renderOverview() {
           : "Nothing waiting",
       },
       {
+        title: "Rating",
+        value: ratingCount ? `★ ${ratingAvg.toFixed(1)}` : "★ —",
+        hint: ratingCount
+          ? `Based on ${ratingCount} review${ratingCount === 1 ? "" : "s"}`
+          : "No reviews yet",
+      },
+      {
         tab: "galleries",
         title: "Galleries",
         value: String(emptyGalleries),
@@ -233,7 +877,7 @@ function renderOverview() {
     );
   } else {
     const pendingMine = bookingsForOverview.filter(
-      (booking) => booking.status === "pending"
+      (booking) => booking.status === "requested"
     ).length;
     cards.push(
       {
@@ -267,7 +911,13 @@ function renderOverview() {
   grid.innerHTML = cards
     .map(
       (card) => `
-      <div class="ov-card${card.alert ? " ov-alert" : ""}" role="button" tabindex="0" data-goto="${card.tab}">
+      <div class="ov-card${card.alert ? " ov-alert" : ""}${
+        card.ok ? " ov-ok" : ""
+      }"${
+        card.tab
+          ? ` role="button" tabindex="0" data-goto="${card.tab}"`
+          : ""
+      }>
         <div class="ov-title">${escapeHtml(card.title)}</div>
         <div class="ov-value">${escapeHtml(card.value)}</div>
         <div class="ov-hint">${escapeHtml(card.hint)}</div>
@@ -313,8 +963,21 @@ function renderNotifications(data) {
   }
   list.innerHTML = data.results
     .map(
-      (item) => `
-      <div class="notif ${item.is_read ? "" : "unread"}">
+      (item, index) => `
+      <div class="notif ${item.is_read ? "" : "unread"}${
+        item.link ? " notif-link" : ""
+      }"${
+        item.link
+          ? ` data-link="${escapeHtml(
+              item.link
+            )}" data-note-id="${item.id}" role="button" tabindex="0"`
+          : ""
+      } style="animation-delay: ${Math.min(index, 9) * 45}ms">
+        ${
+          item.link
+            ? '<span class="notif-go" aria-hidden="true">&rarr;</span>'
+            : ""
+        }
         <div class="n-title">${escapeHtml(item.title)}</div>
         <div class="n-msg">${escapeHtml(item.message)}</div>
         <div class="n-date">
@@ -334,9 +997,43 @@ function renderNotifications(data) {
         method: "POST",
       }).catch(() => null);
       loadNotifications();
+      refreshBellBadge();
     });
   });
 }
+
+function openNotificationTarget(item) {
+  if (!item || !item.dataset.link) {
+    return;
+  }
+  window.lumenNavigate(item.dataset.link);
+}
+
+document.getElementById("notif-list").addEventListener("click", (event) => {
+  if (event.target.closest("[data-read]")) {
+    return;
+  }
+  openNotificationTarget(event.target.closest("[data-link]"));
+});
+document
+  .getElementById("notif-list")
+  .addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    const item = event.target.closest("[data-link]");
+    if (!item) {
+      return;
+    }
+    event.preventDefault();
+    openNotificationTarget(item);
+  });
+
+// The header bell marks everything read when its panel opens.
+document.addEventListener("notifications:read", loadNotifications);
+
+// A WebSocket message arrived (chat, offer, payment…): refresh the list.
+document.addEventListener("notifications:push", loadNotifications);
 
 async function loadNotifications() {
   try {
@@ -371,7 +1068,11 @@ function payActionHtml(booking) {
   const pays = paymentsByBooking.get(booking.id) || {};
   const depositPaid = Boolean(pays.deposit && pays.deposit.status === "paid");
   const balancePaid = Boolean(pays.balance && pays.balance.status === "paid");
-  if (booking.status === "confirmed") {
+  const cashPaid = Boolean(pays.cash && pays.cash.status === "paid");
+  if (cashPaid) {
+    return '<span class="status-chip status-paid">fully paid</span>';
+  }
+  if (booking.status === "accepted") {
     if (balancePaid) {
       return '<span class="status-chip status-paid">fully paid</span>';
     }
@@ -385,80 +1086,544 @@ function payActionHtml(booking) {
     }
     return '<span class="status-chip status-pending">awaiting gallery</span>';
   }
+  if (booking.status === "awaiting_payment" && !depositPaid) {
+    return `<button class="btn btn-sm" type="button" data-pay="${
+      booking.id
+    }" data-kind="deposit">Pay deposit (20%)</button>`;
+  }
   if (depositPaid) {
     return '<span class="status-chip status-paid">deposit paid</span>';
   }
-  return `<button class="btn btn-sm" type="button" data-pay="${
-    booking.id
-  }" data-kind="deposit">Pay deposit (20%)</button>`;
+  return "";
 }
 
+/* One row per request: clicking it opens the detail panel (details + chat). */
 function requestRow(booking, role) {
   const other =
     role === "photographer"
       ? booking.customer_username
       : booking.profile_studio_name || booking.profile_slug;
-  let extra = "";
-  if (role === "photographer" && booking.status === "pending") {
-    extra = `
-      <button class="btn btn-sm" type="button" data-accept="${booking.id}">Accept</button>
-      <button class="btn btn-ghost btn-sm" type="button" data-reject="${booking.id}">Reject</button>`;
-  }
-  if (
-    role === "customer" &&
-    ["accepted", "accepted_pending_deposit", "confirmed"].includes(
-      booking.status
-    )
-  ) {
-    extra = payActionHtml(booking);
-  }
   return `
-    <div class="request-row">
+    <div class="request-row is-clickable" role="button" tabindex="0"
+         data-highlight-id="${booking.id}" data-open-request="${booking.id}">
       <div class="req-info">
         <strong>${escapeHtml(booking.package_title)}</strong>
         <span class="meta">${escapeHtml(other)} · ${formatDate(
-          booking.date,
-          { withTime: true }
+          booking.date
         )}</span>
         ${booking.message ? `<span class="req-msg">${escapeHtml(booking.message)}</span>` : ""}
       </div>
       ${statusChip(booking.status)}
-      ${extra}
+      <span class="req-open" aria-hidden="true">&rsaquo;</span>
     </div>`;
+}
+
+function markRequestRowActive() {
+  document
+    .querySelectorAll("#requests-list [data-open-request]")
+    .forEach((row) => {
+      row.classList.toggle(
+        "is-open",
+        String(row.dataset.openRequest) === String(activeRequestId)
+      );
+    });
+}
+
+function closeRequestDetail() {
+  activeRequestId = null;
+  clearInterval(chatPollTimer);
+  chatPollTimer = null;
+  sessionStorage.removeItem("lumen_open_request");
+  const drawer = document.getElementById("request-drawer");
+  const backdrop = document.getElementById("request-drawer-backdrop");
+  if (drawer) {
+    drawer.classList.remove("is-open");
+    drawer.setAttribute("aria-hidden", "true");
+  }
+  if (backdrop) {
+    backdrop.classList.remove("is-open");
+  }
+  markRequestRowActive();
+}
+
+function isRequestDrawerOpen() {
+  const drawer = document.getElementById("request-drawer");
+  return Boolean(drawer && drawer.classList.contains("is-open"));
+}
+
+/* Opening the drawer is idempotent: switching cards while it is open only
+   refreshes the content, the panel never closes (no flicker). */
+function openRequestDrawer() {
+  const drawer = document.getElementById("request-drawer");
+  const backdrop = document.getElementById("request-drawer-backdrop");
+  if (!drawer || drawer.classList.contains("is-open")) {
+    return;
+  }
+  drawer.classList.add("is-open");
+  drawer.setAttribute("aria-hidden", "false");
+  if (backdrop) {
+    backdrop.classList.add("is-open");
+  }
+}
+
+function detailNote(booking, isPhotographer) {
+  if (booking.status === "requested") {
+    return isPhotographer
+      ? '<p class="detail-note">Negotiate below: send a custom offer, record a cash payment, or reject.</p>'
+      : '<p class="detail-note">Waiting for the photographer to answer your request.</p>';
+  }
+  if (booking.status === "awaiting_payment") {
+    return isPhotographer
+      ? '<p class="detail-note">Waiting for the client\u2019s deposit. You can still adjust the offer or record a cash payment.</p>'
+      : '<p class="detail-note">Pay the 20% deposit to confirm the booking.</p>';
+  }
+  if (booking.status === "accepted") {
+    return isPhotographer
+      ? '<p class="detail-note">Deposit received. Upload the gallery after the session, then mark as completed.</p>'
+      : '<p class="detail-note">Deposit received — your date is confirmed.</p>';
+  }
+  if (booking.status === "completed") {
+    return '<p class="detail-note">Session completed.</p>';
+  }
+  if (booking.status === "rejected") {
+    return '<p class="detail-note">This request was rejected.</p>';
+  }
+  if (booking.status === "cancelled") {
+    return '<p class="detail-note">The deposit deadline passed, so the request was cancelled.</p>';
+  }
+  return "";
+}
+
+function renderRequestDetail(booking) {
+  const body = document.getElementById("drawer-body");
+  const actionsBox = document.getElementById("drawer-actions");
+  if (!body || !actionsBox) {
+    return;
+  }
+  const isPhotographer = myRole === "photographer";
+  const other = isPhotographer
+    ? `Client @${escapeHtml(booking.customer_username)}`
+    : `Studio ${escapeHtml(
+        booking.profile_studio_name || booking.profile_slug || ""
+      )}`;
+  const price = Number(booking.effective_price || 0);
+  const rows = [
+    ["Date", formatDate(booking.date)],
+    booking.event_time ? ["Event time", String(booking.event_time)] : null,
+    booking.event_location ? ["Location", booking.event_location] : null,
+    booking.final_price ? ["Agreed price", `$${price.toFixed(2)}`] : null,
+    booking.status === "awaiting_payment" && booking.deposit_deadline
+      ? [
+          "Deposit deadline",
+          formatDate(booking.deposit_deadline, { withTime: true }),
+        ]
+      : null,
+  ].filter(Boolean);
+  let actions = "";
+  if (isPhotographer) {
+    if (
+      booking.status === "requested" ||
+      booking.status === "awaiting_payment"
+    ) {
+      actions = `
+        <button class="btn btn-ghost btn-sm" type="button" data-detail-reject="${booking.id}">Reject</button>
+        <button class="btn btn-sm" type="button" data-detail-offer="${booking.id}">Customize Offer</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-detail-cash="${booking.id}">Mark as Paid in Cash</button>`;
+    } else if (booking.status === "accepted") {
+      actions = `<button class="btn btn-sm" type="button" data-detail-complete="${booking.id}">Mark as Completed</button>`;
+    }
+  } else if (
+    booking.status === "awaiting_payment" ||
+    booking.status === "accepted"
+  ) {
+    actions = payActionHtml(booking);
+  }
+  let reviewBlock = "";
+  if (
+    isPhotographer &&
+    !["requested", "rejected", "cancelled"].includes(booking.status)
+  ) {
+    const review = reviewsForOverview.find(
+      (item) => item.customer_username === booking.customer_username
+    );
+    if (review) {
+      reviewBlock = `
+      <div class="req-review">
+        <div class="review-head">
+          ${starsHtml(review.rating)}
+          <span class="meta">Review from @${escapeHtml(
+            review.customer_username
+          )}</span>
+        </div>
+        ${
+          review.comment
+            ? `<p class="req-msg">${escapeHtml(review.comment)}</p>`
+            : ""
+        }
+      </div>`;
+    }
+  }
+  const switching = body.dataset.renderedId !== String(booking.id);
+  body.dataset.renderedId = String(booking.id);
+  body.innerHTML = `
+    <div class="detail-summary">
+      <div class="detail-title">
+        <strong>${escapeHtml(booking.package_title)}</strong>
+        <span class="meta">${other} · ${formatDate(booking.date)}</span>
+      </div>
+      <div class="detail-price">
+        ${statusChip(booking.status)}
+        <strong>$${price.toFixed(2)}</strong>
+      </div>
+    </div>
+    ${detailNote(booking, isPhotographer)}
+    <div class="detail-grid">
+      ${rows
+        .map(
+          ([key, value]) =>
+            `<div class="kv"><span>${escapeHtml(
+              key
+            )}</span><strong>${escapeHtml(value)}</strong></div>`
+        )
+        .join("")}
+    </div>
+    ${
+      booking.event_notes
+        ? `<p class="req-msg"><strong>Notes:</strong> ${escapeHtml(
+            booking.event_notes
+          )}</p>`
+        : ""
+    }
+    ${booking.message ? `<p class="req-msg">${escapeHtml(booking.message)}</p>` : ""}
+    ${reviewBlock}
+    <div class="chat-box">
+      <div class="chat-list" id="chat-list"><p class="meta">Loading messages…</p></div>
+      <form class="chat-form" id="chat-form">
+        <input id="chat-input" type="text" maxlength="500" placeholder="Write a message…" autocomplete="off" aria-label="Message" />
+        <button class="btn btn-sm" type="submit">Send</button>
+      </form>
+    </div>`;
+  if (switching) {
+    body.scrollTop = 0;
+  }
+  actionsBox.innerHTML = actions
+    ? `<div class="detail-actions">${actions}</div>`
+    : "";
+  const offerButton = actionsBox.querySelector("[data-detail-offer]");
+  if (offerButton) {
+    offerButton.addEventListener("click", () => openOfferModal(booking));
+  }
+  const cashButton = actionsBox.querySelector("[data-detail-cash]");
+  if (cashButton) {
+    cashButton.addEventListener("click", () => confirmCashPayment(booking.id));
+  }
+  const rejectButton = actionsBox.querySelector("[data-detail-reject]");
+  if (rejectButton) {
+    rejectButton.addEventListener("click", () => confirmReject(booking.id));
+  }
+  const completeButton = actionsBox.querySelector("[data-detail-complete]");
+  if (completeButton) {
+    completeButton.addEventListener("click", () =>
+      confirmComplete(booking.id)
+    );
+  }
+  actionsBox.querySelectorAll("[data-pay]").forEach((button) => {
+    button.addEventListener("click", () =>
+      startPayment(button.dataset.pay, button.dataset.kind || "deposit")
+    );
+  });
+  const chatForm = document.getElementById("chat-form");
+  if (chatForm) {
+    chatForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = document.getElementById("chat-input");
+      const text = input.value.trim();
+      if (!text) {
+        return;
+      }
+      input.value = "";
+      await sendChatMessage(booking.id, text);
+    });
+  }
+}
+
+async function openRequestDetail(id) {
+  const drawer = document.getElementById("request-drawer");
+  const body = document.getElementById("drawer-body");
+  const actionsBox = document.getElementById("drawer-actions");
+  if (!drawer || !body || !actionsBox) {
+    return;
+  }
+  const wasOpen = drawer.classList.contains("is-open");
+  activeRequestId = String(id);
+  sessionStorage.setItem("lumen_open_request", String(id));
+  markRequestRowActive();
+  clearInterval(chatPollTimer);
+  chatPollTimer = null;
+  // Paint what we already know right away: switching cards never flashes.
+  const cached = bookingsForOverview.find(
+    (item) => String(item.id) === String(id)
+  );
+  if (cached) {
+    renderRequestDetail(cached);
+  } else {
+    body.dataset.renderedId = "";
+    body.innerHTML = '<p class="meta">Loading…</p>';
+    actionsBox.innerHTML = "";
+  }
+  openRequestDrawer();
+  try {
+    const response = await apiFetch(`/bookings/${id}/`);
+    if (response.ok) {
+      const booking = await response.json();
+      const index = bookingsForOverview.findIndex(
+        (item) => String(item.id) === String(booking.id)
+      );
+      if (index >= 0) {
+        bookingsForOverview[index] = booking;
+      } else {
+        bookingsForOverview.unshift(booking);
+      }
+      renderOverview();
+      if (String(activeRequestId) === String(id)) {
+        renderRequestDetail(booking);
+      }
+    }
+  } catch (error) {
+    console.error(error);
+  }
+  const booking = bookingsForOverview.find(
+    (item) => String(item.id) === String(id)
+  );
+  if (!booking) {
+    body.innerHTML = '<p class="meta">This request is no longer available.</p>';
+    actionsBox.innerHTML = "";
+    return;
+  }
+  await loadChat(booking.id);
+  chatPollTimer = window.setInterval(() => {
+    if (activeRequestId) {
+      loadChat(activeRequestId);
+    }
+  }, 4000);
+  if (!wasOpen) {
+    body.scrollTop = 0;
+  }
+}
+
+/* Drawer chrome: the X button, the dark backdrop and the Escape key all
+   close the panel. Clicking another card only refreshes the content, the
+   panel stays open (no flicker). */
+const drawerCloseButton = document.getElementById("drawer-close");
+if (drawerCloseButton) {
+  drawerCloseButton.addEventListener("click", closeRequestDetail);
+}
+const drawerBackdrop = document.getElementById("request-drawer-backdrop");
+if (drawerBackdrop) {
+  drawerBackdrop.addEventListener("click", closeRequestDetail);
+}
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !isRequestDrawerOpen()) {
+    return;
+  }
+  // Let open modals handle Escape first (offer, simulated checkout…).
+  const offerModal = document.getElementById("offer-modal");
+  const simModal = document.getElementById("sim-checkout-modal");
+  if (
+    (offerModal && !offerModal.hidden) ||
+    (simModal && !simModal.hidden)
+  ) {
+    return;
+  }
+  closeRequestDetail();
+});
+
+/* Filter chips at the top of the requests list. */
+function setRequestFilter(name) {
+  requestFilter = REQUEST_FILTERS[name] ? name : "all";
+  document
+    .querySelectorAll("#request-filters [data-filter]")
+    .forEach((chip) => {
+      chip.classList.toggle(
+        "is-active",
+        chip.dataset.filter === requestFilter
+      );
+    });
+}
+
+document
+  .querySelectorAll("#request-filters [data-filter]")
+  .forEach((chip) => {
+    chip.addEventListener("click", () => {
+      setRequestFilter(chip.dataset.filter);
+      if (lastRequestsData) {
+        renderRequests(lastRequestsData, lastRequestsRole);
+      }
+    });
+  });
+
+async function loadChat(bookingId) {
+  const list = document.getElementById("chat-list");
+  if (!list) {
+    return;
+  }
+  try {
+    const response = await apiFetch(`/bookings/${bookingId}/messages/`);
+    if (!response.ok) {
+      return;
+    }
+    const messages = await response.json();
+    renderChat(messages, list.dataset.chatFor !== String(bookingId));
+    list.dataset.chatFor = String(bookingId);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function renderChat(messages, forceBottom) {
+  const list = document.getElementById("chat-list");
+  if (!list) {
+    return;
+  }
+  const username = localStorage.getItem(STORAGE.username) || "";
+  if (!messages || messages.length === 0) {
+    list.innerHTML = '<p class="meta">No messages yet. Say hello!</p>';
+    return;
+  }
+  const nearBottom =
+    list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+  list.innerHTML = messages
+    .map((message) => {
+      const time = `<span class="chat-time">${formatDate(message.created_at, {
+        withTime: true,
+      })}</span>`;
+      if (message.is_system || !message.sender_username) {
+        return `<div class="chat-line chat-system">${escapeHtml(
+          message.text
+        )}${time}</div>`;
+      }
+      const mine = message.sender_username === username;
+      return `
+      <div class="chat-line ${mine ? "chat-mine" : "chat-theirs"}">
+        <div class="chat-bubble">
+          <span class="chat-author">${
+            mine ? "You" : escapeHtml(message.sender_username)
+          }</span>
+          <span class="chat-text">${escapeHtml(message.text)}</span>
+        </div>
+        ${time}
+      </div>`;
+    })
+    .join("");
+  if (forceBottom || nearBottom) {
+    list.scrollTop = list.scrollHeight;
+  }
+}
+
+async function sendChatMessage(bookingId, text) {
+  try {
+    const response = await apiFetch(`/bookings/${bookingId}/messages/`, {
+      method: "POST",
+      body: { text },
+    });
+    if (!response.ok) {
+      showToast(await readError(response));
+      return;
+    }
+    await loadChat(bookingId);
+  } catch (error) {
+    console.error(error);
+    showToast("Could not reach the API.");
+  }
 }
 
 function renderRequests(data, role) {
   document.getElementById("requests-title").textContent =
     role === "photographer" ? "Incoming requests" : "My requests";
   const list = document.getElementById("requests-list");
+  lastRequestsData = data;
+  lastRequestsRole = role;
   bookingsForOverview = data.results || [];
   renderOverview();
   updateStripeAlert();
   renderPaymentsSummary();
-  if (!data.results || data.results.length === 0) {
+
+  // Filter chips: keep counts and the active pill in sync.
+  const allResults = data.results || [];
+  const counts = {
+    all: allResults.length,
+    pending: allResults.filter(REQUEST_FILTERS.pending).length,
+    accepted: allResults.filter(REQUEST_FILTERS.accepted).length,
+  };
+  document
+    .querySelectorAll("#request-filters [data-filter]")
+    .forEach((chip) => {
+      const key = chip.dataset.filter;
+      const countEl = chip.querySelector(".filter-count");
+      if (countEl) {
+        countEl.textContent = String(counts[key] ?? 0);
+      }
+      chip.classList.toggle("is-active", key === requestFilter);
+    });
+  // A request opened from a notification must always be visible.
+  if (pendingOpenRequest) {
+    setRequestFilter("all");
+  }
+  const visible = allResults.filter(
+    REQUEST_FILTERS[requestFilter] || REQUEST_FILTERS.all
+  );
+
+  if (allResults.length === 0) {
     list.innerHTML = '<p class="meta">No booking requests yet.</p>';
+  } else if (visible.length === 0) {
+    list.innerHTML = '<p class="meta">No requests in this filter.</p>';
+  } else {
+    list.innerHTML = visible
+      .map((booking) => requestRow(booking, role))
+      .join("");
+    applyPendingHighlight(list, "requests");
+    list.querySelectorAll("[data-open-request]").forEach((row) => {
+      const open = () => openRequestDetail(row.dataset.openRequest);
+      row.addEventListener("click", open);
+      row.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          open();
+        }
+      });
+    });
+  }
+  customerPayActions();
+
+  if (pendingOpenRequest) {
+    const wanted = pendingOpenRequest;
+    pendingOpenRequest = null;
+    if (
+      bookingsForOverview.some((item) => String(item.id) === String(wanted))
+    ) {
+      openRequestDetail(wanted);
+      return;
+    }
+  }
+  if (activeRequestId) {
+    const current = bookingsForOverview.find(
+      (item) => String(item.id) === String(activeRequestId)
+    );
+    if (current) {
+      renderRequestDetail(current);
+      markRequestRowActive();
+    } else {
+      closeRequestDetail();
+    }
     return;
   }
-  list.innerHTML = data.results
-    .map((booking) => requestRow(booking, role))
-    .join("");
-
-  list.querySelectorAll("[data-accept]").forEach((button) => {
-    button.addEventListener("click", () =>
-      transitionBooking(button.dataset.accept, "accept")
-    );
-  });
-  list.querySelectorAll("[data-reject]").forEach((button) => {
-    button.addEventListener("click", () =>
-      transitionBooking(button.dataset.reject, "reject")
-    );
-  });
-  list.querySelectorAll("[data-pay]").forEach((button) => {
-    button.addEventListener("click", () =>
-      startPayment(button.dataset.pay, button.dataset.kind || "deposit")
-    );
-  });
-  customerPayActions();
+  const stored = sessionStorage.getItem("lumen_open_request");
+  if (
+    stored &&
+    bookingsForOverview.some((item) => String(item.id) === stored)
+  ) {
+    openRequestDetail(stored);
+  }
 }
 
 async function loadRequests() {
@@ -472,36 +1637,156 @@ async function loadRequests() {
   }
 }
 
-async function transitionBooking(id, action) {
+async function bookingAction(id, action, body) {
   try {
     const response = await apiFetch(`/bookings/${id}/${action}/`, {
       method: "POST",
+      body: body || {},
     });
     if (!response.ok) {
       showToast(await readError(response));
-      return;
+      return false;
     }
-    showToast(
-      action === "accept"
-        ? "Request accepted — the shoot and client were created."
-        : "Request rejected."
-    );
-    await loadRequests();
-    await loadNotifications();
-    if (action === "accept") {
-      await loadShoots();
-      await loadClients();
-      await loadGalleries();
-      if (myRole === "photographer") {
-        activateTab("shoots");
-      }
-    }
+    return true;
   } catch (error) {
     console.error(error);
+    showToast("Could not reach the API.");
+    return false;
   }
 }
 
+/* Reload everything the open detail depends on: payments first so the
+   pay buttons reflect the latest state, then the list (which re-renders
+   the detail), chat, notifications and the bell badge. */
+async function refreshRequestView(id) {
+  await loadPayments();
+  await loadRequests();
+  if (myRole === "photographer") {
+    await Promise.all([loadShoots(), loadClients(), loadGalleries()]);
+  }
+  await loadChat(id);
+  await loadNotifications();
+  refreshBellBadge();
+}
+
+async function confirmCashPayment(id) {
+  const confirmed = window.confirm(
+    "Mark this booking as paid in cash? The full amount counts toward your earnings."
+  );
+  if (!confirmed) {
+    return;
+  }
+  const ok = await bookingAction(id, "pay_cash");
+  if (ok) {
+    showToast("Cash payment recorded — added to your earnings.");
+    await refreshRequestView(id);
+  }
+}
+
+async function confirmComplete(id) {
+  const confirmed = window.confirm(
+    "Mark this session as completed? The client will be asked to leave a review."
+  );
+  if (!confirmed) {
+    return;
+  }
+  const ok = await bookingAction(id, "complete");
+  if (ok) {
+    showToast("Booking completed.");
+    await refreshRequestView(id);
+  }
+}
+
+async function confirmReject(id) {
+  const confirmed = window.confirm(
+    "Reject this booking request? The client will be notified."
+  );
+  if (!confirmed) {
+    return;
+  }
+  const ok = await bookingAction(id, "reject");
+  if (ok) {
+    showToast("Request rejected.");
+    await refreshRequestView(id);
+  }
+}
+
+function openOfferModal(booking) {
+  let modal = document.getElementById("offer-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "offer-modal";
+    modal.className = "modal";
+    modal.hidden = true;
+    modal.innerHTML = `
+      <div class="modal-panel">
+        <button class="modal-close" id="offer-close" type="button" aria-label="Close">&times;</button>
+        <h3>Customize Offer</h3>
+        <p class="meta">Propose the final price for this request. The client sees the offer in the chat and by notification.</p>
+        <label for="offer-price">Final price (USD)</label>
+        <input id="offer-price" type="number" min="1" step="0.01" inputmode="decimal" />
+        <div class="form-actions">
+          <button class="btn btn-ghost" id="offer-cancel" type="button">Cancel</button>
+          <button class="btn" id="offer-send" type="button">Send offer</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const closeOffer = () => {
+      modal.hidden = true;
+      document.body.style.overflow = "";
+    };
+    modal.addEventListener("click", (event) => {
+      if (
+        event.target === modal ||
+        event.target.closest("#offer-close") ||
+        event.target.closest("#offer-cancel")
+      ) {
+        closeOffer();
+      }
+    });
+    document
+      .getElementById("offer-send")
+      .addEventListener("click", async () => {
+        const input = document.getElementById("offer-price");
+        const price = Number(input.value);
+        if (!input.value || !Number.isFinite(price) || price <= 0) {
+          showToast("Enter a valid price greater than zero.");
+          input.focus();
+          return;
+        }
+        const id = modal.dataset.booking;
+        const sendButton = document.getElementById("offer-send");
+        sendButton.disabled = true;
+        const ok = await bookingAction(id, "offer", { final_price: price });
+        sendButton.disabled = false;
+        if (ok) {
+          modal.hidden = true;
+          document.body.style.overflow = "";
+          showToast("Offer sent to the client.");
+          await refreshRequestView(id);
+        }
+      });
+  }
+  modal.dataset.booking = String(booking.id);
+  const input = document.getElementById("offer-price");
+  input.value = Number(booking.effective_price || 0).toFixed(2);
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+  input.focus();
+  input.select();
+}
+
 async function startPayment(bookingId, kind = "deposit") {
+  // SIMULACIÓN FRONTEND: El flujo real crea una Checkout Session en Django (start_checkout) y redirige a Stripe. Aquí simulamos el pago para la demo.
+  if (STRIPE_DEMO_MODE) {
+    const booking = bookingsForOverview.find(
+      (item) => String(item.id) === String(bookingId)
+    );
+    openSimulatedCheckout(bookingId, kind, {
+      title: booking ? booking.package_title : "",
+    });
+    return;
+  }
   try {
     const response = await apiFetch("/payments/checkout/", {
       method: "POST",
@@ -785,11 +2070,9 @@ async function openGallery(galleryId) {
     const payBanner = document.getElementById("gallery-pay-banner");
     const payText = document.getElementById("gallery-pay-text");
     const payAction = document.getElementById("gallery-pay-action");
-    const awaitingDeposit =
-      detail.booking_status === "accepted_pending_deposit" ||
-      detail.booking_status === "accepted";
+    const awaitingDeposit = detail.booking_status === "awaiting_payment";
     const awaitingBalance =
-      detail.booking_status === "confirmed" && !currentGalleryPaid;
+      detail.booking_status === "accepted" && !currentGalleryPaid;
     if (myRole === "customer" && (awaitingDeposit || awaitingBalance)) {
       payText.textContent = awaitingDeposit
         ? "Pay the deposit to confirm your booking."
@@ -1150,6 +2433,16 @@ lightbox.addEventListener("click", (event) => {
   }
 });
 document.addEventListener("keydown", (event) => {
+  if (!document.getElementById("pf-preview").hidden) {
+    if (event.key === "Escape") {
+      closePortfolioPreview();
+    } else if (event.key === "ArrowRight") {
+      stepPortfolioPreview(1);
+    } else if (event.key === "ArrowLeft") {
+      stepPortfolioPreview(-1);
+    }
+    return;
+  }
   if (!lightbox.hidden) {
     if (event.key === "Escape") {
       closeLightbox();
@@ -1164,6 +2457,8 @@ document.addEventListener("keydown", (event) => {
     document.getElementById("gallery-modal").hidden = true;
     document.getElementById("pkg-modal").hidden = true;
     document.getElementById("photo-modal").hidden = true;
+    document.getElementById("collection-modal").hidden = true;
+    document.getElementById("client-modal").hidden = true;
     document.getElementById("review-modal").hidden = true;
   }
 });
@@ -1180,14 +2475,14 @@ function renderPackages(items) {
   list.innerHTML = items
     .map(
       (pkg) => `
-      <div class="request-row">
-        <div class="req-info">
-          <strong>${escapeHtml(pkg.title)}</strong>
-          <span class="meta">${escapeHtml(pkg.description || "No description")}</span>
+      <div class="package-card" data-highlight-id="${pkg.id}">
+        <h3>${escapeHtml(pkg.title)}</h3>
+        <p class="pkg-desc">${escapeHtml(pkg.description || "No description")}</p>
+        <div class="pkg-price">$${Number(pkg.price).toFixed(2)}</div>
+        <div class="pkg-actions">
+          <button class="btn btn-sm" type="button" data-edit-pkg="${pkg.id}">Edit</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-del-pkg="${pkg.id}">Delete</button>
         </div>
-        <strong class="price-inline">$${Number(pkg.price).toFixed(2)}</strong>
-        <button class="btn btn-sm" type="button" data-edit-pkg="${pkg.id}">Edit</button>
-        <button class="btn btn-ghost btn-sm" type="button" data-del-pkg="${pkg.id}">Delete</button>
       </div>`
     )
     .join("");
@@ -1215,19 +2510,107 @@ function renderPackages(items) {
   });
 }
 
-function renderPortfolioItems(items) {
-  const list = document.getElementById("portfolio-list");
-  if (items.length === 0) {
-    list.innerHTML = '<p class="meta">No photos yet.</p>';
+function renderCollectionChips() {
+  const bar = document.getElementById("collection-chips");
+  if (!bar) {
     return;
   }
-  list.innerHTML = items
+  if (catalogCollections.length === 0) {
+    activeCollectionFilter = "all";
+    bar.hidden = true;
+    bar.innerHTML = "";
+    return;
+  }
+  const total = portfolioItems.length;
+  const chips = [
+    `<span class="filter-chip${
+      activeCollectionFilter === "all" ? " is-active" : ""
+    }" data-collection="all">All <span class="filter-count">${total}</span></span>`,
+  ];
+  catalogCollections.forEach((collection) => {
+    const count = portfolioItems.filter(
+      (photo) => photo.collection === collection.id
+    ).length;
+    chips.push(`
+      <span class="filter-chip${
+        activeCollectionFilter === String(collection.id) ? " is-active" : ""
+      }" data-collection="${collection.id}">${escapeHtml(
+      collection.title
+    )} <span class="filter-count">${count}</span><button class="chip-x" type="button" data-del-collection="${
+      collection.id
+    }" aria-label="Delete collection">&times;</button></span>`);
+  });
+  bar.innerHTML = chips.join("");
+  bar.hidden = false;
+  bar.querySelectorAll("[data-collection]").forEach((chip) => {
+    chip.addEventListener("click", (event) => {
+      if (event.target.closest("[data-del-collection]")) {
+        return;
+      }
+      activeCollectionFilter = chip.dataset.collection;
+      renderCollectionChips();
+      renderPortfolioItems(portfolioItems);
+    });
+  });
+  bar.querySelectorAll("[data-del-collection]").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!confirm("Delete this collection? Its photos stay in your portfolio.")) {
+        return;
+      }
+      const response = await apiFetch(
+        `/portfolio-collections/${button.dataset.delCollection}/`,
+        { method: "DELETE" }
+      ).catch(() => null);
+      if (response && response.ok) {
+        showToast("Collection deleted.");
+        if (activeCollectionFilter === button.dataset.delCollection) {
+          activeCollectionFilter = "all";
+        }
+        loadCatalog();
+      } else if (response) {
+        showToast(await readError(response));
+      }
+    });
+  });
+}
+
+function renderPortfolioItems(items) {
+  portfolioItems = items;
+  const list = document.getElementById("portfolio-list");
+  const visible = items.filter((photo) => {
+    if (activeCollectionFilter === "all") {
+      return true;
+    }
+    if (activeCollectionFilter === "none") {
+      return !photo.collection;
+    }
+    return photo.collection === Number(activeCollectionFilter);
+  });
+  if (visible.length === 0) {
+    portfolioPreviewPhotos = [];
+    list.innerHTML = `<p class="meta">${
+      items.length === 0
+        ? "No photos yet."
+        : "No photos in this collection yet."
+    }</p>`;
+    return;
+  }
+  portfolioPreviewPhotos = visible;
+  list.innerHTML = visible
     .map(
-      (photo) => `
-      <figure class="photo-card">
+      (photo, index) => `
+      <figure class="photo-card" data-index="${index}">
         <img src="${escapeHtml(photo.image)}" alt="${escapeHtml(
           photo.caption || "Portfolio photo"
         )}" loading="lazy" />
+        ${
+          photo.caption
+            ? `<figcaption class="photo-caption">${escapeHtml(
+                photo.caption
+              )}</figcaption>`
+            : ""
+        }
         <div class="photo-tools">
           <button class="btn btn-ghost btn-sm" type="button" data-del-photo-id="${
             photo.id
@@ -1261,18 +2644,27 @@ async function loadCatalog() {
     return;
   }
   try {
-    const [packagesResponse, photosResponse] = await Promise.all([
-      apiFetch(`/packages/?profile=${encodeURIComponent(profile.slug)}`),
-      apiFetch(`/portfolio-photos/?profile=${encodeURIComponent(profile.slug)}`),
-    ]);
+    const [packagesResponse, photosResponse, collectionsResponse] =
+      await Promise.all([
+        apiFetch(`/packages/?profile=${encodeURIComponent(profile.slug)}`),
+        apiFetch(`/portfolio-photos/?profile=${encodeURIComponent(profile.slug)}`),
+        apiFetch(
+          `/portfolio-collections/?profile=${encodeURIComponent(profile.slug)}`
+        ),
+      ]);
     if (packagesResponse.ok) {
       const data = await packagesResponse.json();
       renderPackages(data.results || []);
+    }
+    if (collectionsResponse.ok) {
+      const data = await collectionsResponse.json();
+      catalogCollections = data.results || [];
     }
     if (photosResponse.ok) {
       const data = await photosResponse.json();
       renderPortfolioItems(data.results || []);
     }
+    renderCollectionChips();
   } catch (error) {
     console.error(error);
   }
@@ -1283,7 +2675,7 @@ function openPackageModal(packageId) {
   form.dataset.id = packageId ? String(packageId) : "";
   document.getElementById("pkg-title").textContent = packageId
     ? "Edit package"
-    : "Add package";
+    : "Create new package";
   document.getElementById("pkg-error").hidden = true;
   form.reset();
   if (packageId) {
@@ -1344,11 +2736,44 @@ document.getElementById("pkg-form").addEventListener("submit", async (event) => 
 document.getElementById("btn-add-photo").addEventListener("click", () => {
   document.getElementById("photo-error").hidden = true;
   document.getElementById("photo-form").reset();
+  document.getElementById("photo-file-name").textContent = "No file chosen";
+  const select = document.getElementById("photo-collection");
+  select.innerHTML =
+    `<option value="">No collection</option>` +
+    catalogCollections
+      .map(
+        (collection) =>
+          `<option value="${collection.id}">${escapeHtml(
+            collection.title
+          )}</option>`
+      )
+      .join("");
+  if (activeCollectionFilter !== "all" && activeCollectionFilter !== "none") {
+    select.value = activeCollectionFilter;
+  }
   document.getElementById("photo-modal").hidden = false;
   document.getElementById("photo-url").focus();
 });
 document.getElementById("photo-close").addEventListener("click", () => {
   document.getElementById("photo-modal").hidden = true;
+});
+document.getElementById("btn-pick-photo").addEventListener("click", () => {
+  document.getElementById("photo-file").click();
+});
+document.getElementById("photo-file").addEventListener("change", (event) => {
+  const file = event.target.files && event.target.files[0];
+  document.getElementById("photo-file-name").textContent = file
+    ? file.name
+    : "No file chosen";
+  if (file) {
+    document.getElementById("photo-url").value = "";
+  }
+});
+document.getElementById("photo-url").addEventListener("input", () => {
+  if (document.getElementById("photo-url").value.trim()) {
+    document.getElementById("photo-file").value = "";
+    document.getElementById("photo-file-name").textContent = "No file chosen";
+  }
 });
 document.getElementById("photo-modal").addEventListener("click", (event) => {
   if (event.target.id === "photo-modal") {
@@ -1360,15 +2785,49 @@ document.getElementById("photo-form").addEventListener("submit", async (event) =
   event.preventDefault();
   const errorBox = document.getElementById("photo-error");
   errorBox.hidden = true;
-  const body = {
-    image: document.getElementById("photo-url").value.trim(),
-    caption: document.getElementById("photo-caption").value.trim(),
-  };
+  const caption = document.getElementById("photo-caption").value.trim();
+  const collectionValue = document.getElementById("photo-collection").value;
+  const collection = collectionValue ? Number(collectionValue) : null;
+  const fileInput = document.getElementById("photo-file");
+  const file = fileInput.files && fileInput.files[0];
+  const url = document.getElementById("photo-url").value.trim();
+  if (!file && !url) {
+    errorBox.textContent =
+      "Choose a file from your computer or paste an image URL.";
+    errorBox.hidden = false;
+    return;
+  }
+  if (file) {
+    if (!file.type || !file.type.startsWith("image/")) {
+      errorBox.textContent = "Only image files are allowed.";
+      errorBox.hidden = false;
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      errorBox.textContent = "Image must be 8 MB or smaller.";
+      errorBox.hidden = false;
+      return;
+    }
+  }
   try {
-    const response = await apiFetch("/portfolio-photos/", {
-      method: "POST",
-      body,
-    });
+    let response;
+    if (file) {
+      const form = new FormData();
+      form.append("image", file);
+      form.append("caption", caption);
+      if (collection) {
+        form.append("collection", collection);
+      }
+      response = await apiFetch("/portfolio-photos/upload/", {
+        method: "POST",
+        body: form,
+      });
+    } else {
+      response = await apiFetch("/portfolio-photos/", {
+        method: "POST",
+        body: { image: url, caption, collection },
+      });
+    }
     if (!response.ok) {
       errorBox.textContent = await readError(response);
       errorBox.hidden = false;
@@ -1383,6 +2842,359 @@ document.getElementById("photo-form").addEventListener("submit", async (event) =
     errorBox.hidden = false;
   }
 });
+
+/* ------------------------------ photo preview ---------------------------- */
+
+function renderPortfolioPreview() {
+  const photo = portfolioPreviewPhotos[portfolioPreviewIndex];
+  if (!photo) {
+    return;
+  }
+  const image = document.getElementById("pf-img");
+  image.src = photo.image;
+  image.alt = photo.caption || "Portfolio photo";
+  document.getElementById("pf-caption").textContent = photo.caption || "";
+  document.getElementById("pf-counter").textContent = `${
+    portfolioPreviewIndex + 1
+  } / ${portfolioPreviewPhotos.length}`;
+}
+
+function openPortfolioPreview(index) {
+  if (portfolioPreviewPhotos.length === 0) {
+    return;
+  }
+  portfolioPreviewIndex = Math.max(
+    0,
+    Math.min(index, portfolioPreviewPhotos.length - 1)
+  );
+  renderPortfolioPreview();
+  document.getElementById("pf-preview").hidden = false;
+  document.body.style.overflow = "hidden";
+  document.getElementById("pf-close").focus();
+}
+
+function closePortfolioPreview() {
+  document.getElementById("pf-preview").hidden = true;
+  document.body.style.overflow = "";
+}
+
+function stepPortfolioPreview(delta) {
+  portfolioPreviewIndex =
+    (portfolioPreviewIndex + delta + portfolioPreviewPhotos.length) %
+    portfolioPreviewPhotos.length;
+  renderPortfolioPreview();
+}
+
+document.getElementById("portfolio-list").addEventListener("click", (event) => {
+  if (event.target.closest("[data-del-photo-id]")) {
+    return;
+  }
+  const card = event.target.closest(".photo-card");
+  if (!card) {
+    return;
+  }
+  const index = Number(card.dataset.index);
+  if (!Number.isNaN(index)) {
+    openPortfolioPreview(index);
+  }
+});
+document.getElementById("pf-close").addEventListener("click", closePortfolioPreview);
+document.getElementById("pf-prev").addEventListener("click", () => stepPortfolioPreview(-1));
+document.getElementById("pf-next").addEventListener("click", () => stepPortfolioPreview(1));
+document.getElementById("pf-preview").addEventListener("click", (event) => {
+  if (event.target.id === "pf-preview") {
+    closePortfolioPreview();
+  }
+});
+
+/* ------------------------------ collections ----------------------------- */
+
+document.getElementById("btn-new-collection").addEventListener("click", () => {
+  document.getElementById("collection-error").hidden = true;
+  document.getElementById("collection-form").reset();
+  document.getElementById("collection-modal").hidden = false;
+  document.getElementById("collection-name").focus();
+});
+document
+  .getElementById("collection-close")
+  .addEventListener("click", () => {
+    document.getElementById("collection-modal").hidden = true;
+  });
+document.getElementById("collection-modal").addEventListener("click", (event) => {
+  if (event.target.id === "collection-modal") {
+    event.currentTarget.hidden = true;
+  }
+});
+
+document.getElementById("collection-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const errorBox = document.getElementById("collection-error");
+  errorBox.hidden = true;
+  try {
+    const response = await apiFetch("/portfolio-collections/", {
+      method: "POST",
+      body: { title: document.getElementById("collection-name").value.trim() },
+    });
+    if (!response.ok) {
+      errorBox.textContent = await readError(response);
+      errorBox.hidden = false;
+      return;
+    }
+    document.getElementById("collection-modal").hidden = true;
+    showToast("Collection created.");
+    loadCatalog();
+  } catch (error) {
+    console.error(error);
+    errorBox.textContent = "Could not reach the API.";
+    errorBox.hidden = false;
+  }
+});
+
+/* ----------------------------- public profile --------------------------- */
+
+document
+  .getElementById("public-profile-form")
+  .addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const errorBox = document.getElementById("ppf-error");
+    errorBox.hidden = true;
+    if (!me || !me.profile) {
+      return;
+    }
+    try {
+      const response = await apiFetch(
+        `/profiles/${encodeURIComponent(me.profile.slug)}/`,
+        {
+          method: "PATCH",
+          body: {
+            studio_name: document.getElementById("ppf-studio").value.trim(),
+            city: document.getElementById("ppf-city").value.trim(),
+            is_published: document.getElementById("ppf-published").checked,
+          },
+        }
+      );
+      if (!response.ok) {
+        errorBox.textContent = await readError(response);
+        errorBox.hidden = false;
+        return;
+      }
+      const updated = await response.json();
+      me.profile = { ...me.profile, ...updated };
+      renderMe();
+      showToast("Profile saved.");
+    } catch (error) {
+      console.error(error);
+      errorBox.textContent = "Could not reach the API.";
+      errorBox.hidden = false;
+    }
+  });
+
+/* ---------------------------- account details --------------------------- */
+
+function wireAccountActions() {
+  const errorBox = document.getElementById("acc-error");
+  const emailInput = document.getElementById("acc-email");
+  const usernameInput = document.getElementById("acc-username");
+
+  document
+    .getElementById("account-form")
+    .addEventListener("submit", async (event) => {
+      event.preventDefault();
+      errorBox.hidden = true;
+      const body = {};
+      const email = emailInput.value.trim();
+      const username = usernameInput.value.trim();
+      if (email !== me.email) {
+        body.email = email;
+      }
+      if (username !== me.username) {
+        body.username = username;
+      }
+      if (Object.keys(body).length === 0) {
+        showToast("No changes to save.");
+        return;
+      }
+      try {
+        const response = await apiFetch("/auth/me/", {
+          method: "PATCH",
+          body,
+        });
+        if (!response.ok) {
+          errorBox.textContent = await readError(response);
+          errorBox.hidden = false;
+          return;
+        }
+        const data = await response.json();
+        me.email = data.email;
+        me.username = data.username;
+        localStorage.setItem(STORAGE.username, data.username);
+        renderMe();
+        showToast("Account details updated.");
+      } catch (error) {
+        console.error(error);
+        errorBox.textContent = "Could not reach the API.";
+        errorBox.hidden = false;
+      }
+    });
+
+  const modal = document.getElementById("acc-modal");
+  const form = document.getElementById("acc-form");
+  const pwError = document.getElementById("acc-pw-error");
+  const valueInput = document.getElementById("acc-value");
+  const currentInput = document.getElementById("acc-current");
+
+  function openPasswordModal() {
+    valueInput.value = "";
+    currentInput.value = "";
+    pwError.hidden = true;
+    modal.hidden = false;
+    currentInput.focus();
+  }
+
+  function closeModal() {
+    modal.hidden = true;
+  }
+
+  document
+    .getElementById("btn-change-password")
+    .addEventListener("click", openPasswordModal);
+  document.getElementById("acc-close").addEventListener("click", closeModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    pwError.hidden = true;
+    try {
+      const response = await apiFetch("/auth/change-password/", {
+        method: "POST",
+        body: {
+          current_password: currentInput.value,
+          new_password: valueInput.value,
+        },
+      });
+      if (!response.ok) {
+        pwError.textContent = await readError(response);
+        pwError.hidden = false;
+        return;
+      }
+      closeModal();
+      showToast("Password updated.");
+    } catch (error) {
+      console.error(error);
+      pwError.textContent = "Could not reach the API.";
+      pwError.hidden = false;
+    }
+  });
+}
+
+function wireDirtyForms() {
+  [
+    "ppf-studio",
+    "ppf-city",
+    "ppf-published",
+    "acc-email",
+    "acc-username",
+    "st-studio",
+    "st-city",
+    "st-specialties",
+    "st-phone",
+    "st-bio",
+    "st-experience",
+    "st-languages",
+    "st-equipment",
+    "st-published",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) {
+      return;
+    }
+    el.addEventListener("input", refreshDirtySaves);
+    el.addEventListener("change", refreshDirtySaves);
+  });
+}
+
+/* ------------------------------ cover image ----------------------------- */
+
+function renderCoverPreview() {
+  const preview = document.getElementById("cover-preview");
+  const removeBtn = document.getElementById("btn-remove-cover");
+  if (!preview) {
+    return;
+  }
+  const cover = me && me.profile ? me.profile.cover_image : null;
+  preview.innerHTML = cover
+    ? `<img class="cover-preview-img" src="${escapeHtml(
+        cover
+      )}" alt="Cover photo">`
+    : '<span class="meta">No cover photo</span>';
+  if (removeBtn) {
+    removeBtn.hidden = !cover;
+  }
+}
+
+async function uploadCoverPhoto(file) {
+  const form = new FormData();
+  form.append("cover_image", file);
+  const response = await apiFetch("/profiles/cover/", {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) {
+    showToast(await readError(response));
+    return;
+  }
+  const data = await response.json();
+  me.profile = { ...me.profile, cover_image: data.cover_image };
+  renderCoverPreview();
+  showToast("Cover photo updated.");
+}
+
+function wireCoverUpload() {
+  const button = document.getElementById("btn-upload-cover");
+  const input = document.getElementById("cover-file");
+  const removeBtn = document.getElementById("btn-remove-cover");
+  if (!button || !input) {
+    return;
+  }
+  button.addEventListener("click", () => input.click());
+  input.addEventListener("change", async () => {
+    const file = input.files && input.files[0];
+    input.value = "";
+    if (!file) {
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      showToast("Image must be 4 MB or smaller.");
+      return;
+    }
+    if (!file.type || !file.type.startsWith("image/")) {
+      showToast("Please choose an image file.");
+      return;
+    }
+    await uploadCoverPhoto(file);
+  });
+  if (removeBtn) {
+    removeBtn.addEventListener("click", async () => {
+      if (!confirm("Remove the cover photo?")) {
+        return;
+      }
+      const response = await apiFetch("/profiles/cover/", {
+        method: "DELETE",
+      }).catch(() => null);
+      if (response && response.ok) {
+        me.profile = { ...me.profile, cover_image: null };
+        renderCoverPreview();
+        showToast("Cover photo removed.");
+      } else if (response) {
+        showToast(await readError(response));
+      }
+    });
+  }
+}
 
 /* ----------------------------- studio profile --------------------------- */
 
@@ -1404,6 +3216,12 @@ document.getElementById("studio-form").addEventListener("submit", async (event) 
           specialties: document.getElementById("st-specialties").value.trim(),
           phone: document.getElementById("st-phone").value.trim(),
           bio: document.getElementById("st-bio").value.trim(),
+          years_experience:
+            document.getElementById("st-experience").value === ""
+              ? null
+              : Number(document.getElementById("st-experience").value),
+          languages: document.getElementById("st-languages").value.trim(),
+          equipment: document.getElementById("st-equipment").value.trim(),
           is_published: document.getElementById("st-published").checked,
         },
       }
@@ -1429,36 +3247,106 @@ document.getElementById("studio-form").addEventListener("submit", async (event) 
 
 async function loadClients() {
   try {
-    const response = await apiFetch("/clients/");
-    if (!response.ok) {
-      return;
+    const items = [];
+    let next = "/clients/";
+    while (next) {
+      const response = await apiFetch(next);
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      items.push(...(data.results || []));
+      next = data.next;
     }
-    const data = await response.json();
-    const items = data.results || [];
     const list = document.getElementById("clients-list");
     if (items.length === 0) {
       list.innerHTML =
         '<p class="meta">No clients yet — they appear when you accept a booking.</p>';
       return;
     }
-    list.innerHTML = items
-      .map(
-        (client) => `
-        <div class="request-row">
-          <div class="req-info">
-            <strong>${escapeHtml(client.name)}</strong>
-            <span class="meta">${escapeHtml(client.email || "—")} · ${escapeHtml(
-              client.phone || "no phone"
-            )}</span>
-          </div>
-          <span class="meta">Since ${formatDate(client.created_at)}</span>
-        </div>`
-      )
-      .join("");
+    list.innerHTML = `
+      <table class="pay-table client-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Source</th>
+            <th>Client since</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items
+            .map(
+              (client) => `
+          <tr>
+            <td><strong>${escapeHtml(client.name)}</strong></td>
+            <td>${escapeHtml(client.email || "—")}</td>
+            <td>${escapeHtml(client.phone || "—")}</td>
+            <td>
+              <span class="chip${
+                client.is_manual ? " chip--manual" : ""
+              }">${client.is_manual ? "Added manually" : "Booked online"}</span>
+            </td>
+            <td>${formatDate(client.created_at)}</td>
+          </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`;
   } catch (error) {
     console.error(error);
   }
 }
+
+document.getElementById("btn-add-client").addEventListener("click", () => {
+  document.getElementById("client-error").hidden = true;
+  document.getElementById("client-form").reset();
+  document.getElementById("client-modal").hidden = false;
+  document.getElementById("client-name").focus();
+});
+document.getElementById("client-close").addEventListener("click", () => {
+  document.getElementById("client-modal").hidden = true;
+});
+document.getElementById("client-modal").addEventListener("click", (event) => {
+  if (event.target.id === "client-modal") {
+    event.currentTarget.hidden = true;
+  }
+});
+
+document.getElementById("client-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const errorBox = document.getElementById("client-error");
+  errorBox.hidden = true;
+  const name = document.getElementById("client-name").value.trim();
+  if (!name) {
+    errorBox.textContent = "Name is required.";
+    errorBox.hidden = false;
+    return;
+  }
+  try {
+    const response = await apiFetch("/clients/", {
+      method: "POST",
+      body: {
+        name,
+        email: document.getElementById("client-email").value.trim(),
+        phone: document.getElementById("client-phone").value.trim(),
+      },
+    });
+    if (!response.ok) {
+      errorBox.textContent = await readError(response);
+      errorBox.hidden = false;
+      return;
+    }
+    document.getElementById("client-modal").hidden = true;
+    showToast("Client added.");
+    loadClients();
+  } catch (error) {
+    console.error(error);
+    errorBox.textContent = "Could not reach the API.";
+    errorBox.hidden = false;
+  }
+});
 
 /* ------------------------------- favorites ------------------------------ */
 
@@ -1518,9 +3406,12 @@ async function loadFavorites() {
 /* ------------------------------ my reviews ------------------------------ */
 
 function renderMyReviews(items) {
-  const list = document.getElementById("my-reviews-list");
   reviewsForOverview = items;
   renderOverview();
+  if (myRole !== "customer") {
+    return;
+  }
+  const list = document.getElementById("my-reviews-list");
   if (items.length === 0) {
     list.innerHTML =
       '<p class="meta">You have not reviewed anyone yet — open a photographer profile to write one.</p>';
@@ -1665,9 +3556,7 @@ function customerPayActions() {
     return;
   }
   const payable = bookingsForOverview.filter((booking) =>
-    ["accepted", "accepted_pending_deposit", "confirmed"].includes(
-      booking.status
-    )
+    ["awaiting_payment", "accepted"].includes(booking.status)
   );
   const rows = payable
     .map(
@@ -1675,9 +3564,7 @@ function customerPayActions() {
       <div class="request-row">
         <div class="req-info">
           <strong>${escapeHtml(booking.package_title)}</strong>
-          <span class="meta">${formatDate(booking.date, {
-            withTime: true,
-          })}</span>
+          <span class="meta">${formatDate(booking.date)}</span>
         </div>
         ${payActionHtml(booking)}
       </div>`
@@ -1706,6 +3593,26 @@ function renderPaymentActions() {
     return;
   }
   actions.hidden = false;
+  const connected =
+    Boolean(me && me.profile && me.profile.stripe_connected) ||
+    isDemoStripeConnected();
+  if (connected) {
+    const demo = isDemoStripeConnected();
+    actions.innerHTML = `
+      <div class="setup-block setup-connected">
+        <div class="setup-connected-title">
+          <span class="setup-check" aria-hidden="true">&#10003;</span>
+          Stripe Connected${demo ? " (Demo Mode)" : ""}
+        </div>
+        <p class="meta">${
+          demo
+            ? "Simulated for this demo: payments settle inside Lumen."
+            : "Deposits go straight to your account."
+        }</p>
+        <a class="btn btn-sm" href="https://dashboard.stripe.com/test/payments" target="_blank" rel="noopener noreferrer">View Stripe Dashboard</a>
+      </div>`;
+    return;
+  }
   actions.innerHTML = `
     <div class="setup-block">
       <h3>Accept deposits</h3>
@@ -1737,9 +3644,7 @@ function renderPaymentsSummary() {
     .filter((payment) => payment.status === "paid")
     .reduce((sum, payment) => sum + Number(payment.amount_cents || 0), 0);
   const pendingCount = bookingsForOverview.filter((booking) => {
-    if (
-      !["accepted", "accepted_pending_deposit"].includes(booking.status)
-    ) {
+    if (!["awaiting_payment", "accepted"].includes(booking.status)) {
       return false;
     }
     const pays = paymentsByBooking.get(booking.id) || {};
@@ -1774,7 +3679,7 @@ function renderPayments(data) {
   paymentsByBooking = new Map();
   for (const payment of data.results || []) {
     const entry = paymentsByBooking.get(payment.booking) || {};
-    entry[payment.kind === "balance" ? "balance" : "deposit"] = payment;
+    entry[payment.kind] = payment;
     paymentsByBooking.set(payment.booking, entry);
   }
   renderPaymentsSummary();
@@ -1782,25 +3687,48 @@ function renderPayments(data) {
   if (!data.results || data.results.length === 0) {
     return;
   }
-  list.innerHTML = data.results
-    .map(
-      (payment) => `
-      <div class="request-row">
-        <div class="req-info">
-          <strong>${
-            payment.kind === "balance" ? "Balance" : "Deposit"
-          } · Booking #${escapeHtml(payment.booking)}</strong>
-          <span class="meta">${formatDate(payment.created_at, {
-            withTime: true,
-          })}</span>
-        </div>
-        <strong class="price-inline">${escapeHtml(payment.currency || "usd").toUpperCase()} ${(Number(
-          payment.amount_cents
-        ) / 100).toFixed(2)}</strong>
-        ${statusChip(payment.status)}
-      </div>`
+  // History table: the latest payments first (client, date, amount, status).
+  const latest = [...paymentsForOverview]
+    .sort(
+      (a, b) =>
+        new Date(b.paid_at || b.created_at) -
+        new Date(a.paid_at || a.created_at)
     )
-    .join("");
+    .slice(0, 10);
+  const whoLabel = myRole === "photographer" ? "Client" : "Studio";
+  list.innerHTML = `
+    <table class="pay-table">
+      <thead>
+        <tr>
+          <th>${whoLabel}</th>
+          <th>Date</th>
+          <th>Amount</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${latest
+          .map((payment) => {
+            const who =
+              myRole === "photographer"
+                ? payment.customer_username
+                : payment.photographer_username;
+            return `
+          <tr data-highlight-id="${payment.id}">
+            <td>${escapeHtml(who || "-")}</td>
+            <td>${formatDate(payment.paid_at || payment.created_at)}</td>
+            <td>$${(Number(payment.amount_cents || 0) / 100).toFixed(2)}
+              <div class="meta">${
+                payment.kind === "balance" ? "Balance" : "Deposit"
+              }</div>
+            </td>
+            <td>${statusChip(payment.status)}</td>
+          </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>`;
+  applyPendingHighlight(list, "payments");
 }
 
 async function loadPayments() {
@@ -1895,6 +3823,7 @@ async function init() {
     ]);
   } else {
     await loadGalleries();
+    await loadMyReviews();
     await Promise.all([
       loadRequests(),
       loadShoots(),
@@ -1903,7 +3832,12 @@ async function init() {
       loadPayments(),
     ]);
   }
+  finishPendingHighlight();
 }
 
 initHeader();
+wireProfilePictureUpload();
+wireCoverUpload();
+wireAccountActions();
+wireDirtyForms();
 init();

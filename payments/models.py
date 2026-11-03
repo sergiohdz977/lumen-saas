@@ -11,6 +11,7 @@ class Payment(models.Model):
     class Kind(models.TextChoices):
         DEPOSIT = "deposit", "Deposit"
         BALANCE = "balance", "Balance"
+        CASH = "cash", "Cash"
 
     booking = models.ForeignKey(
         "bookings.BookingRequest",

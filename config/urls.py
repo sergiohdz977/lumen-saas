@@ -3,6 +3,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.http import FileResponse, Http404
 from django.urls import include, path, re_path
+from django.views.generic import RedirectView
 from django.views.static import serve as serve_static_file
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -61,6 +62,15 @@ urlpatterns = [
     # Stripe checkout return pages (the webhook marks the payment as paid).
     path("payments/success/", page("payment-result.html")),
     path("payments/cancel/", page("payment-result.html")),
+    # Stripe Connect onboarding returns (else the photographer lands on 404).
+    path(
+        "payments/onboard/done/",
+        RedirectView.as_view(url="/dashboard.html?tab=profile"),
+    ),
+    path(
+        "payments/onboard/refresh/",
+        RedirectView.as_view(url="/dashboard.html?tab=profile"),
+    ),
     re_path(
         r"^(?P<path>(?:css|js|img)/[A-Za-z0-9._/-]+)$",
         frontend_asset,

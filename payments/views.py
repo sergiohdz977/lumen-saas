@@ -1,9 +1,12 @@
 import stripe
+from django.conf import settings
+from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from bookings.models import BookingRequest
 from users.models import User
 from users.permissions import IsCustomer, IsPhotographer
 
@@ -21,7 +24,7 @@ class PaymentViewSet(
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
-        if self.action == "checkout":
+        if self.action in ("checkout", "simulate"):
             return [IsAuthenticated(), IsCustomer()]
         if self.action in ("onboard", "upgrade"):
             return [IsAuthenticated(), IsPhotographer()]
@@ -63,6 +66,42 @@ class PaymentViewSet(
             {
                 "payment": PaymentSerializer(payment).data,
                 "checkout_url": url,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=["get", "post"], url_path="simulate")
+    def simulate(self, request):
+        """Demo payments: GET quotes the amount, POST settles it (no Stripe)."""
+        if not settings.STRIPE_DEMO_MODE:
+            raise NotFound("Demo payments are disabled")
+        booking_id = request.data.get("booking") or request.query_params.get(
+            "booking"
+        )
+        kind = str(
+            request.data.get("kind") or request.query_params.get("kind") or ""
+        ).strip()
+        if kind not in (Payment.Kind.DEPOSIT, Payment.Kind.BALANCE):
+            raise ValidationError("kind must be 'deposit' or 'balance'")
+        if not booking_id:
+            raise ValidationError("booking is required")
+        booking = get_object_or_404(BookingRequest, pk=booking_id)
+        if request.method == "GET":
+            amount_cents = services.simulate_quote(
+                request.user, booking, kind
+            )
+            return Response(
+                {
+                    "amount_cents": amount_cents,
+                    "kind": kind,
+                    "booking_status": booking.status,
+                }
+            )
+        payment = services.simulate_payment(request.user, booking, kind)
+        return Response(
+            {
+                "payment": PaymentSerializer(payment).data,
+                "booking_status": payment.booking.status,
             },
             status=status.HTTP_201_CREATED,
         )

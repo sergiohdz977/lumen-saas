@@ -260,6 +260,9 @@ if "test" in sys.argv:
 # Stripe payments (test keys live in .env; see .env.example).
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+# Demo mode: lets the frontend simulate Connect + checkout without a real
+# Stripe account (API keys / country verification unavailable for the demo).
+STRIPE_DEMO_MODE = _env("STRIPE_DEMO_MODE", "1") == "1"
 # Deposit due to confirm a booking, as a percentage of the package price.
 DEPOSIT_PERCENTAGE = 20
 # Remaining percentage charged as the balance after the shoot.

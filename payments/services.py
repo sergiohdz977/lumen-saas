@@ -1,5 +1,7 @@
 from decimal import ROUND_HALF_UP, Decimal
+from uuid import uuid4
 
+import stripe
 from django.conf import settings
 from django.utils import timezone
 from bookings.models import BookingRequest
@@ -9,6 +11,15 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from . import providers
 from .models import Payment
+
+
+def _stripe_rejected(err):
+    """Turn a Stripe API failure into an actionable 400 for the UI."""
+    http_status = getattr(err, "http_status", None) or "error"
+    return ValidationError(
+        f"Stripe rejected the request (HTTP {http_status}): {err}. "
+        "Check STRIPE_SECRET_KEY in .env (Dashboard -> API keys, test mode)."
+    )
 
 
 def start_onboarding(user, country):
@@ -22,11 +33,14 @@ def start_onboarding(user, country):
         raise ValidationError(
             "Country must be a 2-letter code, for example US or ES"
         )
-    if not user.profile.stripe_account_id:
-        account = providers.create_connected_account(country)
-        user.profile.stripe_account_id = account.id
-        user.profile.save(update_fields=["stripe_account_id"])
-    link = providers.create_account_link(user.profile.stripe_account_id)
+    try:
+        if not user.profile.stripe_account_id:
+            account = providers.create_connected_account(country)
+            user.profile.stripe_account_id = account.id
+            user.profile.save(update_fields=["stripe_account_id"])
+        link = providers.create_account_link(user.profile.stripe_account_id)
+    except stripe.StripeError as err:
+        raise _stripe_rejected(err)
     return link.url
 
 
@@ -40,12 +54,14 @@ def booking_paid_kinds(booking):
 
 
 def booking_is_fully_paid(booking):
-    """True once deposit and balance are both settled."""
+    """True once the booking is fully settled (Stripe or cash)."""
     if booking is None:
         return True
-    return {Payment.Kind.DEPOSIT, Payment.Kind.BALANCE} <= booking_paid_kinds(
-        booking
-    )
+    paid = booking_paid_kinds(booking)
+    return Payment.Kind.CASH in paid or {
+        Payment.Kind.DEPOSIT,
+        Payment.Kind.BALANCE,
+    } <= paid
 
 
 def _warn_stripe_missing(photographer, customer, booking):
@@ -62,6 +78,7 @@ def _warn_stripe_missing(photographer, customer, booking):
             f'"{booking.package.title}", but you cannot receive money '
             "until you connect Stripe."
         ),
+        link="dashboard.html?tab=payments",
     )
 
 
@@ -71,12 +88,9 @@ def start_checkout(user, booking, kind=Payment.Kind.DEPOSIT):
         raise PermissionDenied("That booking does not belong to you")
     paid_kinds = booking_paid_kinds(booking)
     if kind == Payment.Kind.DEPOSIT:
-        if booking.status not in (
-            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
-            BookingRequest.Status.ACCEPTED,
-        ):
+        if booking.status != BookingRequest.Status.AWAITING_PAYMENT:
             raise ValidationError(
-                "You can only pay a deposit for an accepted booking"
+                "You can only pay a deposit for a booking waiting for payment"
             )
         if Payment.Kind.DEPOSIT in paid_kinds:
             raise ValidationError(
@@ -84,9 +98,9 @@ def start_checkout(user, booking, kind=Payment.Kind.DEPOSIT):
             )
         percentage = settings.DEPOSIT_PERCENTAGE
     elif kind == Payment.Kind.BALANCE:
-        if booking.status != BookingRequest.Status.CONFIRMED:
+        if booking.status != BookingRequest.Status.ACCEPTED:
             raise ValidationError(
-                "You can only pay the balance for a confirmed booking"
+                "You can only pay the balance for an accepted booking"
             )
         if Payment.Kind.DEPOSIT not in paid_kinds:
             raise ValidationError(
@@ -112,7 +126,8 @@ def start_checkout(user, booking, kind=Payment.Kind.DEPOSIT):
         )
     payment = Payment.objects.filter(booking=booking, kind=kind).first()
     if payment is None:
-        amount = booking.package.price * Decimal(percentage) / Decimal(100)
+        # The offer's final price drives the amount when there is one.
+        amount = booking.effective_price * Decimal(percentage) / Decimal(100)
         amount_cents = (amount * 100).quantize(Decimal("1"), ROUND_HALF_UP)
         payment = Payment.objects.create(
             booking=booking,
@@ -147,6 +162,71 @@ def start_checkout(user, booking, kind=Payment.Kind.DEPOSIT):
     return payment, session.url
 
 
+def _simulate_plan(user, booking, kind):
+    """Validations and amount for a simulated payment (no Stripe calls).
+
+    SIMULACIÓN BACKEND: replica el cálculo de start_checkout sin tocar
+    Stripe. El backend real (start_checkout + settle_payment) sigue ahí.
+    """
+    if booking.customer_id != user.id:
+        raise PermissionDenied("That booking does not belong to you")
+    paid_kinds = booking_paid_kinds(booking)
+    if kind == Payment.Kind.DEPOSIT:
+        if booking.status != BookingRequest.Status.AWAITING_PAYMENT:
+            raise ValidationError(
+                "You can only pay a deposit for a booking waiting for payment"
+            )
+        if Payment.Kind.DEPOSIT in paid_kinds:
+            raise ValidationError(
+                "The deposit for this booking has already been paid"
+            )
+        percentage = settings.DEPOSIT_PERCENTAGE
+    elif kind == Payment.Kind.BALANCE:
+        if booking.status != BookingRequest.Status.ACCEPTED:
+            raise ValidationError(
+                "You can only pay the balance for an accepted booking"
+            )
+        if Payment.Kind.DEPOSIT not in paid_kinds:
+            raise ValidationError(
+                "Pay the deposit before paying the balance"
+            )
+        if Payment.Kind.BALANCE in paid_kinds:
+            raise ValidationError(
+                "The balance for this booking has already been paid"
+            )
+        shoot = getattr(booking, "shoot", None)
+        if shoot is None or getattr(shoot, "gallery", None) is None:
+            raise ValidationError("The gallery is not ready yet")
+        percentage = settings.BALANCE_PERCENTAGE
+    else:
+        raise ValidationError("Unknown payment kind")
+    amount = booking.effective_price * Decimal(percentage) / Decimal(100)
+    return int((amount * 100).quantize(Decimal("1"), ROUND_HALF_UP))
+
+
+def simulate_quote(user, booking, kind):
+    """Amount in cents for a simulated payment. Creates nothing."""
+    return _simulate_plan(user, booking, kind)
+
+
+def simulate_payment(user, booking, kind):
+    """Demo: settle a payment directly, skipping Stripe entirely."""
+    amount_cents = _simulate_plan(user, booking, kind)
+    payment = Payment.objects.filter(booking=booking, kind=kind).first()
+    if payment is None:
+        payment = Payment.objects.create(
+            booking=booking,
+            kind=kind,
+            customer=user,
+            photographer=booking.package.profile.user,
+            amount_cents=amount_cents,
+            # payments_payment.stripe_session_id is unique: simulated rows
+            # get a synthetic id instead of an empty string.
+            stripe_session_id=f"demo_{uuid4().hex[:32]}",
+        )
+    return settle_payment(payment)
+
+
 def start_upgrade(user):
     """Start Stripe Checkout for the photographer's Pro subscription."""
     from profiles.models import PhotographerProfile
@@ -160,16 +240,19 @@ def start_upgrade(user):
     if not settings.STRIPE_PRO_PRICE_ID:
         raise ValidationError("Subscriptions are not configured yet")
     profile = user.profile
-    if not profile.stripe_customer_id:
-        customer = providers.create_customer(user.email)
-        profile.stripe_customer_id = customer.id
-        profile.save(update_fields=["stripe_customer_id"])
-    session = providers.create_subscription_session(
-        customer_id=profile.stripe_customer_id,
-        price_id=settings.STRIPE_PRO_PRICE_ID,
-        success_url=f"{settings.SITE_URL}/payments/success/",
-        cancel_url=f"{settings.SITE_URL}/payments/cancel/",
-    )
+    try:
+        if not profile.stripe_customer_id:
+            customer = providers.create_customer(user.email)
+            profile.stripe_customer_id = customer.id
+            profile.save(update_fields=["stripe_customer_id"])
+        session = providers.create_subscription_session(
+            customer_id=profile.stripe_customer_id,
+            price_id=settings.STRIPE_PRO_PRICE_ID,
+            success_url=f"{settings.SITE_URL}/payments/success/",
+            cancel_url=f"{settings.SITE_URL}/payments/cancel/",
+        )
+    except stripe.StripeError as err:
+        raise _stripe_rejected(err)
     return session.url
 
 
@@ -183,17 +266,16 @@ def settle_payment(payment):
     if payment.kind == Payment.Kind.DEPOSIT:
         booking = payment.booking
         confirmed = False
-        if booking.status in (
-            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
-            BookingRequest.Status.ACCEPTED,
-        ):
-            booking.status = BookingRequest.Status.CONFIRMED
+        if booking.status == BookingRequest.Status.AWAITING_PAYMENT:
+            # Deposit paid: the booking is now accepted (gallery unlocks).
+            booking.status = BookingRequest.Status.ACCEPTED
             booking.save(update_fields=["status"])
             confirmed = True
         notify(
             payment.photographer,
             "Deposit received",
             f"{payment.customer.username}'s deposit was paid",
+            link=f"dashboard.html?tab=payments&item={payment.pk}",
         )
         notify(
             payment.customer,
@@ -203,17 +285,20 @@ def settle_payment(payment):
                 if confirmed
                 else "Your deposit was received"
             ),
+            link=f"dashboard.html?tab=payments&item={payment.pk}",
         )
     else:
         notify(
             payment.photographer,
             "Balance received",
             f"{payment.customer.username}'s final payment was paid",
+            link=f"dashboard.html?tab=payments&item={payment.pk}",
         )
         notify(
             payment.customer,
             "Payment confirmed",
             "Your remaining balance was received",
+            link=f"dashboard.html?tab=payments&item={payment.pk}",
         )
     return payment
 

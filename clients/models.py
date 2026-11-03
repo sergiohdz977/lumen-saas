@@ -16,6 +16,11 @@ class Client(models.Model):
     name = models.CharField(max_length=120)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=30, blank=True)
+    is_manual = models.BooleanField(
+        default=False,
+        help_text="True when the photographer added this client by hand "
+        "(False for clients created from bookings).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

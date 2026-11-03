@@ -33,6 +33,7 @@ class NotificationRestTests(TestCase):
             user=cls.maria,
             title="Booking accepted",
             message="Your session was accepted",
+            link="dashboard.html?tab=requests",
         )
         Notification.objects.create(
             user=cls.luis, title="De luis", message="otra notificacion"
@@ -94,6 +95,15 @@ class NotificationRestTests(TestCase):
             response.data["results"][0]["title"], "Recien llegada"
         )
 
+    def test_list_includes_the_link_field(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.get("/api/notifications/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["results"][0]["link"],
+            "dashboard.html?tab=requests",
+        )
+
 
 class NotifyIntegrationTests(TestCase):
     """The three business events that create notifications."""
@@ -144,6 +154,9 @@ class NotifyIntegrationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         note = Notification.objects.get(user=self.maria)
         self.assertEqual(note.title, "Booking accepted")
+        self.assertEqual(
+            note.link, f"dashboard.html?tab=requests&item={self.booking.pk}"
+        )
 
     def test_new_review_notifies_the_photographer(self):
         self.api.force_authenticate(self.maria)
@@ -159,6 +172,7 @@ class NotifyIntegrationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         note = Notification.objects.get(user=self.ana)
         self.assertEqual(note.title, "New review")
+        self.assertEqual(note.link, "dashboard.html?tab=overview")
 
     def test_gallery_creation_notifies_the_customer(self):
         self.api.force_authenticate(self.ana)
@@ -168,6 +182,7 @@ class NotifyIntegrationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         note = Notification.objects.get(user=self.maria)
         self.assertEqual(note.title, "Your photos are ready")
+        self.assertTrue(note.link.startswith("gallery.html?token="))
 
 
 class NotificationWebSocketTests(TransactionTestCase):
@@ -185,11 +200,15 @@ class NotificationWebSocketTests(TransactionTestCase):
             connected, _ = await communicator.connect()
             self.assertTrue(connected)
             await sync_to_async(notify)(
-                user, "Booking accepted", "All set"
+                user,
+                "Booking accepted",
+                "All set",
+                link="dashboard.html?tab=requests",
             )
             payload = await communicator.receive_json_from()
             self.assertEqual(payload["title"], "Booking accepted")
             self.assertEqual(payload["message"], "All set")
+            self.assertEqual(payload["link"], "dashboard.html?tab=requests")
             await communicator.disconnect()
 
         async_to_sync(scenario)()

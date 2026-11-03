@@ -19,6 +19,8 @@ class PhotographerProfile(models.Model):
     )
     studio_name = models.CharField(max_length=120, blank=True)
     slug = models.SlugField(max_length=140, unique=True)
+    # Cloudinary (or local media as fallback) URL; empty when not set.
+    profile_picture = models.URLField(max_length=500, blank=True)
     bio = models.TextField(blank=True)
     city = models.CharField(max_length=100, blank=True)
     specialties = models.CharField(max_length=200, blank=True)
@@ -34,7 +36,15 @@ class PhotographerProfile(models.Model):
     stripe_customer_id = models.CharField(
         max_length=255, blank=True, default=""
     )
-    subscription_id = models.CharField(max_length=255, blank=True, default="")
+    subscription_id = models.CharField(
+        max_length=255, blank=True, default=""
+    )
+    # Public profile extras (About Me).
+    years_experience = models.PositiveIntegerField(null=True, blank=True)
+    languages = models.CharField(max_length=200, blank=True)
+    equipment = models.TextField(blank=True)
+    # Banner shown behind the avatar on the public profile.
+    cover_image = models.URLField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -76,11 +86,34 @@ class Package(models.Model):
         return self.title
 
 
+class PortfolioCollection(models.Model):
+    profile = models.ForeignKey(
+        PhotographerProfile,
+        on_delete=models.CASCADE,
+        related_name="portfolio_collections",
+    )
+    title = models.CharField(max_length=100)
+
+    class Meta:
+        ordering = ["id"]
+        unique_together = [["profile", "title"]]
+
+    def __str__(self):
+        return self.title
+
+
 class PortfolioPhoto(models.Model):
     profile = models.ForeignKey(
         PhotographerProfile,
         on_delete=models.CASCADE,
         related_name="portfolio_photos",
+    )
+    collection = models.ForeignKey(
+        PortfolioCollection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="photos",
     )
     image = models.URLField(max_length=500, blank=True)
     caption = models.CharField(max_length=200, blank=True)

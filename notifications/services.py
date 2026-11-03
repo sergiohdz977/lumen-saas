@@ -4,7 +4,7 @@ from channels.layers import get_channel_layer
 from .models import Notification
 
 
-def notify(user, title, message=""):
+def notify(user, title, message="", link=""):
     """Persist a notification and push it over the open WebSocket.
 
     Called from synchronous code (views, Celery tasks). The push is
@@ -12,7 +12,7 @@ def notify(user, title, message=""):
     available, so the REST endpoint always shows the full history.
     """
     notification = Notification.objects.create(
-        user=user, title=title, message=message
+        user=user, title=title, message=message, link=link
     )
     channel_layer = get_channel_layer()
     if channel_layer is None:
@@ -26,6 +26,7 @@ def notify(user, title, message=""):
                     "id": notification.pk,
                     "title": notification.title,
                     "message": notification.message,
+                    "link": notification.link,
                     "created_at": notification.created_at.isoformat(),
                 },
             },

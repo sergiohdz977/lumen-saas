@@ -1,5 +1,35 @@
 from rest_framework import serializers
-from .models import BookingRequest
+from .models import BookingRequest, Message
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender_username = serializers.CharField(
+        source="sender.username", read_only=True, allow_null=True
+    )
+    is_system = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = [
+            "id",
+            "booking",
+            "sender",
+            "sender_username",
+            "is_system",
+            "text",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "booking",
+            "sender",
+            "sender_username",
+            "is_system",
+            "created_at",
+        ]
+
+    def get_is_system(self, obj):
+        return obj.sender_id is None
 
 
 class BookingRequestSerializer(serializers.ModelSerializer):
@@ -15,6 +45,9 @@ class BookingRequestSerializer(serializers.ModelSerializer):
     profile_studio_name = serializers.CharField(
         source="package.profile.studio_name", read_only=True, allow_blank=True
     )
+    effective_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True
+    )
     shoot = serializers.SerializerMethodField()
 
     class Meta:
@@ -27,7 +60,12 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "profile_slug",
             "profile_studio_name",
             "date",
+            "event_location",
+            "event_time",
+            "event_notes",
             "message",
+            "final_price",
+            "effective_price",
             "status",
             "deposit_deadline",
             "shoot",
@@ -39,6 +77,8 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "package_title",
             "profile_slug",
             "profile_studio_name",
+            "final_price",
+            "effective_price",
             "status",
             "deposit_deadline",
             "shoot",

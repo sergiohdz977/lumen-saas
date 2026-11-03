@@ -35,4 +35,5 @@ class ReviewViewSet(viewsets.ModelViewSet):
             review.photographer,
             "New review",
             f"{review.customer.username} gave you {review.rating}/5",
+            link="dashboard.html?tab=overview",
         )

@@ -6,6 +6,13 @@ from .models import Payment
 
 
 class PaymentSerializer(serializers.ModelSerializer):
+    customer_username = serializers.CharField(
+        source="customer.username", read_only=True
+    )
+    photographer_username = serializers.CharField(
+        source="photographer.username", read_only=True
+    )
+
     class Meta:
         model = Payment
         fields = [
@@ -19,6 +26,8 @@ class PaymentSerializer(serializers.ModelSerializer):
             "status",
             "created_at",
             "paid_at",
+            "customer_username",
+            "photographer_username",
         ]
         read_only_fields = fields
 

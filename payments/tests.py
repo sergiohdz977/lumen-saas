@@ -76,7 +76,7 @@ class PaymentTestCase(TestCase):
             customer=cls.maria,
             package=cls.package,
             date="2026-11-20T10:00:00Z",
-            status=BookingRequest.Status.ACCEPTED,
+status=BookingRequest.Status.AWAITING_PAYMENT,
         )
         cls.pending_booking = BookingRequest.objects.create(
             customer=cls.maria,
@@ -203,7 +203,7 @@ class CheckoutTests(PaymentTestCase):
                 format="json",
             )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("accepted", str(response.data))
+        self.assertIn("waiting for payment", str(response.data))
 
     def test_checkout_of_another_customers_booking_is_denied(self):
         self.api.force_authenticate(self.luis)
@@ -637,7 +637,7 @@ class BalanceCheckoutTests(PaymentTestCase):
         self.shoot.booking = self.booking
         self.shoot.save(update_fields=["booking"])
         if confirmed:
-            self.booking.status = BookingRequest.Status.CONFIRMED
+            self.booking.status = BookingRequest.Status.ACCEPTED
             self.booking.save(update_fields=["status"])
         if deposit_paid:
             Payment.objects.create(
@@ -683,7 +683,7 @@ class BalanceCheckoutTests(PaymentTestCase):
         self._prepare(confirmed=False)
         response, _ = self._checkout()
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("confirmed", str(response.data))
+        self.assertIn("accepted", str(response.data))
 
     def test_balance_requires_paid_deposit(self):
         self._prepare(deposit_paid=False)
@@ -741,7 +741,7 @@ class WebhookConfirmationTests(PaymentTestCase):
     def setUp(self):
         super().setUp()
         self.booking.status = (
-            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT
+            BookingRequest.Status.AWAITING_PAYMENT
         )
         self.booking.deposit_deadline = timezone.now() + timedelta(hours=48)
         self.booking.save(update_fields=["status", "deposit_deadline"])
@@ -766,14 +766,14 @@ class WebhookConfirmationTests(PaymentTestCase):
         response = self._post_webhook(_session_event(payment=self.payment))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.booking.refresh_from_db()
-        self.assertEqual(self.booking.status, BookingRequest.Status.CONFIRMED)
+        self.assertEqual(self.booking.status, BookingRequest.Status.ACCEPTED)
         message = Notification.objects.get(
             user=self.maria, title="Payment confirmed"
         ).message
         self.assertIn("confirmed", message)
 
     def test_balance_payment_keeps_the_booking_confirmed(self):
-        self.booking.status = BookingRequest.Status.CONFIRMED
+        self.booking.status = BookingRequest.Status.ACCEPTED
         self.booking.save(update_fields=["status"])
         Payment.objects.create(
             booking=self.booking,
@@ -799,7 +799,7 @@ class WebhookConfirmationTests(PaymentTestCase):
         balance.refresh_from_db()
         self.assertEqual(balance.status, Payment.Status.PAID)
         self.booking.refresh_from_db()
-        self.assertEqual(self.booking.status, BookingRequest.Status.CONFIRMED)
+        self.assertEqual(self.booking.status, BookingRequest.Status.ACCEPTED)
         titles = set(Notification.objects.values_list("title", flat=True))
         self.assertIn("Balance received", titles)
         self.assertIn("Payment confirmed", titles)
@@ -855,7 +855,7 @@ class FullyPaidHelperTests(PaymentTestCase):
 class ConfirmSessionTests(PaymentTestCase):
     def _prepare(self, payment_status="paid"):
         self.booking.status = (
-            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT
+            BookingRequest.Status.AWAITING_PAYMENT
         )
         self.booking.save(update_fields=["status"])
         self.payment = Payment.objects.create(
@@ -890,8 +890,8 @@ class ConfirmSessionTests(PaymentTestCase):
         self.payment.refresh_from_db()
         self.assertEqual(self.payment.status, Payment.Status.PAID)
         self.booking.refresh_from_db()
-        self.assertEqual(self.booking.status, BookingRequest.Status.CONFIRMED)
-        self.assertEqual(response.data["booking_status"], "confirmed")
+        self.assertEqual(self.booking.status, BookingRequest.Status.ACCEPTED)
+        self.assertEqual(response.data["booking_status"], "accepted")
 
     def test_processing_session_stays_pending(self):
         session = self._prepare(payment_status="unpaid")
@@ -902,7 +902,7 @@ class ConfirmSessionTests(PaymentTestCase):
         self.booking.refresh_from_db()
         self.assertEqual(
             self.booking.status,
-            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
+            BookingRequest.Status.AWAITING_PAYMENT,
         )
 
     def test_confirming_someone_elses_session_is_denied(self):
@@ -968,3 +968,174 @@ class ConfirmSessionTests(PaymentTestCase):
             "{CHECKOUT_SESSION_ID}",
             mock_create.call_args.kwargs["success_url"],
         )
+
+class OnboardStripeErrorTests(PaymentTestCase):
+    """A broken Stripe key must surface as a clear 400, never a 500."""
+
+    def _stripe_denied(self):
+        error = stripe.StripeError(
+            "We're sorry, but we're unable to serve your request."
+        )
+        error.http_status = 403
+        return error
+
+    def test_onboard_maps_account_link_error_to_400(self):
+        self.api.force_authenticate(self.ana)
+        with patch(
+            "payments.providers.create_account_link",
+            side_effect=self._stripe_denied(),
+        ):
+            response = self.api.post(
+                "/api/payments/onboard/", {"country": "US"}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("STRIPE_SECRET_KEY", str(response.data))
+
+    def test_onboard_maps_account_create_error_to_400(self):
+        rookie = User.objects.create_user(
+            username="nuevo",
+            email="nuevo@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        PhotographerProfile.objects.create(
+            user=rookie, studio_name="Nuevo", slug="nuevo"
+        )
+        self.api.force_authenticate(rookie)
+        with patch(
+            "payments.providers.create_connected_account",
+            side_effect=self._stripe_denied(),
+        ):
+            response = self.api.post(
+                "/api/payments/onboard/", {"country": "ES"}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("HTTP 403", str(response.data))
+
+
+class DemoSimulationTests(PaymentTestCase):
+    """GET/POST /api/payments/simulate/ settles payments without Stripe."""
+
+    def test_quote_returns_amount_and_creates_nothing(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.get(
+            f"/api/payments/simulate/?booking={self.booking.pk}&kind=deposit"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["amount_cents"], 4000)
+        self.assertEqual(response.data["kind"], "deposit")
+        self.assertEqual(
+            response.data["booking_status"],
+            BookingRequest.Status.AWAITING_PAYMENT,
+        )
+        self.assertFalse(
+            Payment.objects.filter(booking=self.booking).exists()
+        )
+
+    def test_deposit_settles_and_confirms_booking(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            "/api/payments/simulate/",
+            {"booking": self.booking.pk, "kind": "deposit"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payment = Payment.objects.get(booking=self.booking)
+        self.assertEqual(payment.status, Payment.Status.PAID)
+        self.assertEqual(payment.kind, Payment.Kind.DEPOSIT)
+        self.assertEqual(payment.amount_cents, 4000)
+        self.assertIsNotNone(payment.paid_at)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.status, BookingRequest.Status.ACCEPTED)
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.ana, title="Deposit received"
+            ).exists()
+        )
+
+    def test_balance_requires_the_deposit_first(self):
+        self.booking.status = BookingRequest.Status.ACCEPTED
+        self.booking.save(update_fields=["status"])
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            "/api/payments/simulate/",
+            {"booking": self.booking.pk, "kind": "balance"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("deposit before", str(response.data))
+
+    def test_balance_settles_and_completes_the_booking(self):
+        self.shoot.booking = self.booking
+        self.shoot.save(update_fields=["booking"])
+        self.booking.status = BookingRequest.Status.ACCEPTED
+        self.booking.save(update_fields=["status"])
+        Payment.objects.create(
+            booking=self.booking,
+            kind=Payment.Kind.DEPOSIT,
+            customer=self.maria,
+            photographer=self.ana,
+            amount_cents=4000,
+            stripe_session_id="cs_dep_demo",
+            status=Payment.Status.PAID,
+            paid_at=timezone.now(),
+        )
+        Gallery.objects.create(shoot=self.shoot)
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            "/api/payments/simulate/",
+            {"booking": self.booking.pk, "kind": "balance"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["payment"]["amount_cents"], 16000)
+        self.assertEqual(
+            response.data["booking_status"],
+            BookingRequest.Status.ACCEPTED,
+        )
+        self.assertTrue(booking_is_fully_paid(self.booking))
+
+    def test_settlement_is_blocked_for_another_customer(self):
+        self.api.force_authenticate(self.luis)
+        response = self.api.post(
+            "/api/payments/simulate/",
+            {"booking": self.booking.pk, "kind": "deposit"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            Payment.objects.filter(booking=self.booking).exists()
+        )
+
+    def test_photographer_cannot_settle(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.post(
+            "/api/payments/simulate/",
+            {"booking": self.booking.pk, "kind": "deposit"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_unknown_kind_is_rejected(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            "/api/payments/simulate/",
+            {"booking": self.booking.pk, "kind": "crypto"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("kind", str(response.data))
+
+    @override_settings(STRIPE_DEMO_MODE=False)
+    def test_disabled_flag_returns_404(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.get(
+            f"/api/payments/simulate/?booking={self.booking.pk}&kind=deposit"
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_requires_authentication(self):
+        response = self.api.get(
+            f"/api/payments/simulate/?booking={self.booking.pk}&kind=deposit"
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

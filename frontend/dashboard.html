@@ -4,16 +4,28 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lumen — Dashboard</title>
-  <link rel="stylesheet" href="css/styles.css?v=14" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="css/styles.css?v=50" />
 </head>
 <body>
   <header class="site-header">
     <div class="container header-inner">
-      <a class="logo" href="index.html">Lumen<span class="logo-dot">.</span></a>
+      <a class="logo" href="index.html">
+        <svg class="logo-mark" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 2.5l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.8L12 2.5z" />
+          <path d="M18.5 14.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9.9-2.1z" />
+        </svg>
+        Lumen<span class="logo-dot">.</span>
+      </a>
       <nav class="nav">
         <a href="index.html#photographers" data-nav-photos>Photographers</a>
         <a href="index.html" data-nav-public hidden>Public site</a>
-        <a href="dashboard.html" aria-current="page">Dashboard</a>
+        <a href="dashboard.html" aria-current="page" data-nav-dash>Dashboard</a>
         <span id="bell-area" class="bell-area" hidden>
           <button id="btn-bell" class="bell-btn" type="button" aria-label="Notifications" aria-expanded="false">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -64,17 +76,20 @@
         </div>
         <div class="tabs" id="dash-tabs" role="tablist">
           <button class="tab is-active" type="button" data-tab="overview">Overview</button>
+          <button class="tab" type="button" data-tab="jobs">Jobs</button>
           <button class="tab" type="button" data-tab="notifications">Notifications <span class="tag" id="notif-count">0</span></button>
-          <button class="tab" type="button" data-tab="requests">Requests</button>
-          <button class="tab" type="button" data-tab="shoots" data-roles="photographer" hidden>Shoots</button>
-          <button class="tab" type="button" data-tab="catalog" data-roles="photographer" hidden>Catalog</button>
-          <button class="tab" type="button" data-tab="studio" data-roles="photographer" hidden>Studio profile</button>
-          <button class="tab" type="button" data-tab="clients" data-roles="photographer" hidden>Clients</button>
-          <button class="tab" type="button" data-tab="galleries">Galleries</button>
+          <button class="tab" type="button" data-tab="packages" data-roles="photographer" hidden>Packages</button>
+          <button class="tab" type="button" data-tab="catalog" data-roles="photographer" hidden>Portfolio</button>
           <button class="tab" type="button" data-tab="favorites" data-roles="customer" hidden>Favorites</button>
           <button class="tab" type="button" data-tab="reviews" data-roles="customer" hidden>My reviews</button>
           <button class="tab" type="button" data-tab="payments">Payments</button>
           <button class="tab" type="button" data-tab="profile">Settings</button>
+        </div>
+
+        <div id="jobs-bar" class="jobs-bar" hidden>
+          <button class="tab sub-tab" type="button" data-view="requests">Requests</button>
+          <button class="tab sub-tab" type="button" data-view="shoots" data-roles="photographer" hidden>Shoots</button>
+          <button class="tab sub-tab" type="button" data-view="galleries">Galleries</button>
         </div>
 
         <section class="panel tab-panel" data-panel="overview">
@@ -84,26 +99,69 @@
         <section class="panel tab-panel" data-panel="profile" hidden>
           <div class="panel-head">
             <h2>Settings</h2>
-            <a class="btn btn-ghost btn-sm" id="btn-view-public" href="#" target="_blank" rel="noopener" hidden>View my public profile</a>
+            <a class="btn btn-ghost btn-sm" id="btn-view-public" href="#" hidden>View my public profile</a>
+          </div>
+
+          <div id="settings-bar" class="jobs-bar">
+            <button class="tab sub-tab is-active" type="button" data-subtab="public">Public profile</button>
+            <button class="tab sub-tab" type="button" data-subtab="account">Account details</button>
+            <button class="tab sub-tab" type="button" data-subtab="billing">Billing</button>
+            <button class="tab sub-tab" type="button" data-subtab="studio">Studio profile</button>
+            <button class="tab sub-tab" type="button" data-subtab="clients">Clients</button>
+          </div>
+
+          <div id="pp-section" class="settings-section" hidden>
+            <h3>Profile Picture</h3>
+            <div class="pp-row">
+              <div id="pp-preview" class="pp-preview"></div>
+              <div>
+                <button class="btn btn-sm" id="btn-upload-pp" type="button">Upload new photo</button>
+                <p class="meta">JPG or PNG, up to 2 MB.</p>
+              </div>
+            </div>
+            <input type="file" id="pp-file" accept="image/png,image/jpeg" hidden>
           </div>
 
           <div id="profile-studio" class="settings-section" hidden>
             <h3>Public Profile</h3>
-            <div class="kv"><span>Studio</span><strong id="me-studio"></strong></div>
-            <div class="kv"><span>City</span><strong id="me-city"></strong></div>
-            <div class="kv"><span>Published</span><strong id="me-published"></strong></div>
+            <form id="public-profile-form" class="form-grid">
+              <label for="ppf-studio">Studio</label>
+              <input id="ppf-studio" name="studio_name" maxlength="120" />
+              <label for="ppf-city">City</label>
+              <input id="ppf-city" name="city" maxlength="100" />
+              <label class="check-row" for="ppf-published">
+                <input id="ppf-published" name="is_published" type="checkbox" />
+                Published — visible in the marketplace
+              </label>
+              <p id="ppf-error" class="form-error" hidden></p>
+              <div class="form-actions">
+                <button class="btn btn-sm" id="ppf-save" type="submit" hidden>Save changes</button>
+              </div>
+            </form>
             <div class="chips" id="me-chips" style="margin-top:12px"></div>
           </div>
 
-          <div class="settings-section">
+          <div id="account-section" class="settings-section">
             <h3>Account Details</h3>
-            <table class="settings-table">
-              <tbody>
-                <tr><th>Email</th><td id="me-email"></td></tr>
-                <tr><th>Username</th><td id="me-username"></td></tr>
-                <tr><th>Role</th><td><span class="tag" id="me-role"></span></td></tr>
-              </tbody>
-            </table>
+            <form id="account-form" class="form-grid">
+              <label for="acc-email">Email</label>
+              <input id="acc-email" type="email" maxlength="254" autocomplete="email" />
+              <label for="acc-username">Username</label>
+              <input id="acc-username" maxlength="30" autocomplete="username" />
+              <label>Password</label>
+              <div>
+                <button class="btn btn-ghost btn-sm" id="btn-change-password" type="button">Change password</button>
+              </div>
+              <label>Role</label>
+              <div>
+                <span class="tag" id="me-role"></span>
+                <span class="meta">read only</span>
+              </div>
+              <p id="acc-error" class="form-error" hidden></p>
+              <div class="form-actions">
+                <button class="btn btn-sm" id="acc-save" type="submit" hidden>Save changes</button>
+              </div>
+            </form>
           </div>
 
           <div id="billing-section" class="settings-section" hidden>
@@ -115,6 +173,56 @@
               <p class="meta">Free allows 3 galleries and 100 photos. Pro is unlimited.</p>
               <button class="btn btn-sm" id="btn-upgrade" type="button">Upgrade to Pro</button>
             </div>
+          </div>
+
+          <div id="studio-settings" class="settings-section" hidden>
+            <h3>Studio profile</h3>
+            <a class="btn btn-ghost btn-sm" id="studio-view-link" href="#" hidden style="margin:-4px 0 12px">View public page</a>
+
+            <div class="cover-row">
+              <div id="cover-preview" class="cover-preview"><span class="meta">No cover photo</span></div>
+              <div>
+                <button class="btn btn-sm" id="btn-upload-cover" type="button">Upload cover photo</button>
+                <button class="btn btn-ghost btn-sm" id="btn-remove-cover" type="button" hidden>Remove</button>
+                <p class="meta">Banner behind your profile photo. JPG or PNG, up to 4 MB.</p>
+              </div>
+            </div>
+            <input type="file" id="cover-file" accept="image/png,image/jpeg" hidden>
+
+            <form id="studio-form" class="form-grid">
+              <label for="st-studio">Studio name</label>
+              <input id="st-studio" name="studio_name" maxlength="120" />
+              <label for="st-city">City</label>
+              <input id="st-city" name="city" maxlength="100" />
+              <label for="st-specialties">Specialties</label>
+              <input id="st-specialties" name="specialties" maxlength="200" placeholder="weddings, portraits" />
+              <label for="st-phone">Phone</label>
+              <input id="st-phone" name="phone" maxlength="30" />
+              <label for="st-bio">Bio (About Me)</label>
+              <textarea id="st-bio" name="bio" rows="4" placeholder="Your story, style and experience…"></textarea>
+              <label for="st-experience">Years of experience</label>
+              <input id="st-experience" name="years_experience" type="number" min="0" max="80" placeholder="8" />
+              <label for="st-languages">Languages</label>
+              <input id="st-languages" name="languages" maxlength="200" placeholder="English, Spanish" />
+              <label for="st-equipment">Equipment (optional)</label>
+              <textarea id="st-equipment" name="equipment" rows="2" placeholder="Sony A7IV, 85mm f/1.4, lighting kit…"></textarea>
+              <label class="check-row" for="st-published">
+                <input id="st-published" name="is_published" type="checkbox" />
+                Published — visible in the marketplace
+              </label>
+              <p id="studio-error" class="form-error" hidden></p>
+              <div class="form-actions">
+                <button class="btn" id="st-save" type="submit" hidden>Save profile</button>
+              </div>
+            </form>
+          </div>
+
+          <div id="clients-settings" class="settings-section" hidden>
+            <div class="panel-head">
+              <h3>Clients</h3>
+              <button class="btn btn-sm" id="btn-add-client" type="button">+ Add Client</button>
+            </div>
+            <div id="clients-list"><p class="meta">No clients yet — they appear when you accept a booking.</p></div>
           </div>
         </section>
 
@@ -128,7 +236,43 @@
 
         <section class="panel tab-panel" data-panel="requests" hidden>
           <div class="panel-head"><h2 id="requests-title">Booking requests</h2></div>
+          <div class="request-filters" id="request-filters">
+            <button class="filter-chip is-active" type="button" data-filter="all">
+              All <span class="filter-count">0</span>
+            </button>
+            <button class="filter-chip" type="button" data-filter="pending">
+              Pending <span class="filter-count">0</span>
+            </button>
+            <button class="filter-chip" type="button" data-filter="accepted">
+              Accepted <span class="filter-count">0</span>
+            </button>
+          </div>
           <div id="requests-list"><p class="meta">No booking requests yet.</p></div>
+
+          <!-- Gmail-style slide-in drawer: the list stays visible on the left -->
+          <div id="request-drawer-backdrop" class="drawer-backdrop"></div>
+          <aside
+            id="request-drawer"
+            class="request-drawer"
+            aria-hidden="true"
+            aria-label="Booking Details"
+          >
+            <div class="drawer-head">
+              <h3>Booking Details</h3>
+              <button
+                class="drawer-close"
+                id="drawer-close"
+                type="button"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <div class="drawer-body" id="drawer-body">
+              <p class="meta">Loading…</p>
+            </div>
+            <div class="drawer-actions" id="drawer-actions"></div>
+          </aside>
         </section>
 
         <section class="panel tab-panel" data-panel="shoots" data-roles="photographer" hidden>
@@ -138,48 +282,24 @@
 
         <section class="panel tab-panel" data-panel="catalog" data-roles="photographer" hidden>
           <div class="panel-head">
-            <h2>Catalog</h2>
+            <h2>Portfolio</h2>
             <span class="panel-actions">
-              <button class="btn btn-sm" id="btn-add-package" type="button">Add package</button>
-              <button class="btn btn-ghost btn-sm" id="btn-add-photo" type="button">Add portfolio photo</button>
+              <button class="btn btn-sm" id="btn-new-collection" type="button">+ New collection</button>
+              <button class="btn btn-ghost btn-sm" id="btn-add-photo" type="button">Add photo</button>
             </span>
           </div>
-          <p class="meta">Packages and portfolio shown on your public profile.</p>
-          <div id="pkg-list"><p class="meta">No packages yet.</p></div>
-          <h3 class="sub-title">Portfolio</h3>
+          <p class="meta">Portfolio photos shown on your public profile, grouped by collection.</p>
+          <div class="request-filters" id="collection-chips" hidden></div>
           <div class="photo-strip" id="portfolio-list"><p class="meta">No photos yet.</p></div>
         </section>
 
-        <section class="panel tab-panel" data-panel="studio" data-roles="photographer" hidden>
+        <section class="panel tab-panel" data-panel="packages" data-roles="photographer" hidden>
           <div class="panel-head">
-            <h2>Studio profile</h2>
-            <a class="btn btn-ghost btn-sm" id="studio-view-link" href="#" target="_blank" rel="noopener" hidden>View public page</a>
+            <h2>Packages</h2>
+            <button class="btn btn-sm" id="btn-add-package" type="button">+ Create new package</button>
           </div>
-          <form id="studio-form" class="form-grid">
-            <label for="st-studio">Studio name</label>
-            <input id="st-studio" name="studio_name" maxlength="120" />
-            <label for="st-city">City</label>
-            <input id="st-city" name="city" maxlength="100" />
-            <label for="st-specialties">Specialties</label>
-            <input id="st-specialties" name="specialties" maxlength="200" placeholder="weddings, portraits" />
-            <label for="st-phone">Phone</label>
-            <input id="st-phone" name="phone" maxlength="30" />
-            <label for="st-bio">Bio</label>
-            <textarea id="st-bio" name="bio" rows="4"></textarea>
-            <label class="check-row" for="st-published">
-              <input id="st-published" name="is_published" type="checkbox" />
-              Published — visible in the marketplace
-            </label>
-            <p id="studio-error" class="form-error" hidden></p>
-            <div class="form-actions">
-              <button class="btn" type="submit">Save profile</button>
-            </div>
-          </form>
-        </section>
-
-        <section class="panel tab-panel" data-panel="clients" data-roles="photographer" hidden>
-          <h2>Clients</h2>
-          <div id="clients-list"><p class="meta">No clients yet — they appear when you accept a booking.</p></div>
+          <p class="meta">Packages shown on your public profile.</p>
+          <div id="pkg-list" class="packages-grid"><p class="meta">No packages yet.</p></div>
         </section>
 
         <section class="panel tab-panel" data-panel="galleries" hidden>
@@ -219,11 +339,11 @@
   <div id="pkg-modal" class="modal" hidden>
     <div class="modal-panel">
       <button class="modal-close" id="pkg-close" type="button" aria-label="Close">&times;</button>
-      <h2 id="pkg-title">Add package</h2>
+      <h2 id="pkg-title">Create new package</h2>
       <form id="pkg-form">
-        <label for="pkg-name">Title</label>
+        <label for="pkg-name">Package name</label>
         <input id="pkg-name" name="title" maxlength="150" required />
-        <label for="pkg-desc">Description</label>
+        <label for="pkg-desc">Short description</label>
         <textarea id="pkg-desc" name="description" rows="3"></textarea>
         <label for="pkg-price">Price (USD)</label>
         <input id="pkg-price" name="price" type="number" min="0" step="0.01" required />
@@ -238,12 +358,52 @@
       <button class="modal-close" id="photo-close" type="button" aria-label="Close">&times;</button>
       <h2>Add portfolio photo</h2>
       <form id="photo-form">
-        <label for="photo-url">Image URL</label>
-        <input id="photo-url" name="image" type="url" placeholder="https://…" required />
-        <label for="photo-caption">Caption (optional)</label>
-        <input id="photo-caption" name="caption" maxlength="200" />
+        <label>Photo from your computer</label>
+        <div class="file-row">
+          <button class="btn btn-ghost btn-sm" id="btn-pick-photo" type="button">Choose file…</button>
+          <span class="meta" id="photo-file-name">No file chosen</span>
+        </div>
+        <input id="photo-file" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+        <label for="photo-url">…or image URL</label>
+        <input id="photo-url" name="image" type="url" placeholder="https://…" />
+        <label for="photo-caption">Title / short description (optional)</label>
+        <input id="photo-caption" name="caption" maxlength="200" placeholder="Sunset vows at the cliff…" />
+        <label for="photo-collection">Collection</label>
+        <select id="photo-collection" name="collection"></select>
         <p id="photo-error" class="form-error" hidden></p>
         <button class="btn btn-block" type="submit">Add photo</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="client-modal" class="modal" hidden>
+    <div class="modal-panel">
+      <button class="modal-close" id="client-close" type="button" aria-label="Close">&times;</button>
+      <h2>Add client</h2>
+      <p class="modal-sub">They will show up next to clients who booked online.</p>
+      <form id="client-form">
+        <label for="client-name">Name</label>
+        <input id="client-name" maxlength="120" required />
+        <label for="client-email">Email (optional)</label>
+        <input id="client-email" type="email" maxlength="254" />
+        <label for="client-phone">Phone (optional)</label>
+        <input id="client-phone" maxlength="30" />
+        <p id="client-error" class="form-error" hidden></p>
+        <button class="btn btn-block" type="submit">Save client</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="collection-modal" class="modal" hidden>
+    <div class="modal-panel">
+      <button class="modal-close" id="collection-close" type="button" aria-label="Close">&times;</button>
+      <h2>New collection</h2>
+      <p class="modal-sub">Group your portfolio, e.g. Weddings, Portraits.</p>
+      <form id="collection-form">
+        <label for="collection-name">Collection name</label>
+        <input id="collection-name" maxlength="100" placeholder="Weddings" required />
+        <p id="collection-error" class="form-error" hidden></p>
+        <button class="btn btn-block" type="submit">Create collection</button>
       </form>
     </div>
   </div>
@@ -314,6 +474,58 @@
     </div>
   </div>
 
+  <div id="pp-crop-modal" class="modal" hidden>
+    <div class="modal-panel modal-panel-crop">
+      <button class="modal-close" id="pp-crop-close" type="button" aria-label="Close">&times;</button>
+      <h2>Crop your photo</h2>
+      <p class="modal-sub">Drag to move, zoom and rotate until the circle looks right. Square output.</p>
+      <div class="crop-stage" id="crop-stage">
+        <img id="crop-img" alt="Crop preview" draggable="false">
+        <div class="crop-frame" aria-hidden="true"></div>
+      </div>
+      <div class="crop-controls">
+        <button class="btn btn-ghost btn-sm" id="crop-zoom-out" type="button" aria-label="Zoom out">−</button>
+        <input type="range" id="crop-zoom" min="1" max="4" step="0.01" value="1" aria-label="Zoom">
+        <button class="btn btn-ghost btn-sm" id="crop-zoom-in" type="button" aria-label="Zoom in">+</button>
+      </div>
+      <div class="crop-controls">
+        <button class="btn btn-ghost btn-sm" id="crop-rotate" type="button">Rotate 90°</button>
+        <button class="btn btn-ghost btn-sm" id="crop-reset" type="button">Reset</button>
+      </div>
+      <div class="crop-actions">
+        <button class="btn btn-ghost" id="crop-cancel" type="button">Cancel</button>
+        <button class="btn" id="crop-upload" type="button">Upload</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pp-viewer-modal" class="modal" hidden>
+    <div class="modal-panel modal-panel-viewer">
+      <button class="modal-close" id="pp-viewer-close" type="button" aria-label="Close">&times;</button>
+      <h2>Profile picture</h2>
+      <img id="pp-viewer-img" class="pp-viewer-img" alt="Profile picture">
+      <div class="crop-actions">
+        <button class="btn btn-ghost" id="pp-viewer-replace" type="button">Replace</button>
+        <button class="btn" id="pp-viewer-remove" type="button">Remove photo</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="acc-modal" class="modal" hidden>
+    <div class="modal-panel">
+      <button class="modal-close" id="acc-close" type="button" aria-label="Close">&times;</button>
+      <h2 id="acc-title">Change password</h2>
+      <form id="acc-form">
+        <label for="acc-current">Current password</label>
+        <input id="acc-current" type="password" autocomplete="current-password" />
+        <label for="acc-value">New password</label>
+        <input id="acc-value" type="password" autocomplete="new-password" />
+        <p id="acc-pw-error" class="form-error" hidden></p>
+        <button class="btn btn-block" type="submit">Save</button>
+      </form>
+    </div>
+  </div>
+
   <div class="lightbox" id="lightbox" hidden>
     <button class="lb-btn lb-close" id="lb-close" aria-label="Close">✕</button>
     <button class="lb-btn lb-prev" id="lb-prev" aria-label="Previous photo">‹</button>
@@ -330,7 +542,18 @@
     </span>
   </div>
 
-  <script src="js/common.js?v=14"></script>
-  <script src="js/dashboard.js?v=14"></script>
+  <div class="lightbox" id="pf-preview" hidden>
+    <button class="lb-btn lb-close" id="pf-close" aria-label="Close">✕</button>
+    <button class="lb-btn lb-prev" id="pf-prev" aria-label="Previous photo">‹</button>
+    <figure class="lb-stage">
+      <img id="pf-img" alt="" />
+      <figcaption class="lb-caption" id="pf-caption"></figcaption>
+    </figure>
+    <button class="lb-btn lb-next" id="pf-next" aria-label="Next photo">›</button>
+    <span class="lb-counter" id="pf-counter"></span>
+  </div>
+
+  <script src="js/common.js?v=50"></script>
+  <script src="js/dashboard.js?v=50"></script>
 </body>
 </html>

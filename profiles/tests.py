@@ -1,9 +1,11 @@
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
 
 from users.models import User
 from .models import Package, PhotographerProfile, PortfolioPhoto
+from reviews.models import Review
 
 
 class PublicProfileEndpointsTests(TestCase):
@@ -91,12 +93,18 @@ class PublicProfileEndpointsTests(TestCase):
             "slug",
             "username",
             "studio_name",
+            "profile_picture",
+            "cover_image",
             "bio",
             "city",
             "specialties",
             "phone",
+            "years_experience",
+            "languages",
+            "equipment",
             "is_published",
             "plan",
+            "rating_avg",
             "created_at",
         }
         self.assertEqual(set(response.data.keys()), expected)
@@ -750,3 +758,273 @@ class ProfileUpdateEndpointsTests(TestCase):
         response = self.api.get("/api/packages/")
         titles = [p["title"] for p in response.data["results"]]
         self.assertNotIn("Sesion oculta", titles)
+
+
+class ProfileRatingPriceFilterTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.rated = User.objects.create_user(
+            username="starfotografa",
+            email="star@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.low = User.objects.create_user(
+            username="lowfotografa",
+            email="low@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.rated_profile = PhotographerProfile.objects.create(
+            user=cls.rated,
+            studio_name="Star Studio",
+            slug="star-studio",
+            is_published=True,
+        )
+        cls.low_profile = PhotographerProfile.objects.create(
+            user=cls.low,
+            studio_name="Low Studio",
+            slug="low-studio",
+            is_published=True,
+        )
+        cls.unrated_profile = PhotographerProfile.objects.create(
+            user=User.objects.create_user(
+                username="sinresenas",
+                email="sinresenas@test.com",
+                password="secret123",
+                role=User.ROLE_PHOTOGRAPHER,
+            ),
+            studio_name="Quiet Studio",
+            slug="quiet-studio",
+            is_published=True,
+        )
+        cls.customers = [
+            User.objects.create_user(
+                username=f"critico{n}",
+                email=f"critico{n}@test.com",
+                password="secret123",
+                role=User.ROLE_CUSTOMER,
+            )
+            for n in range(3)
+        ]
+        Review.objects.create(
+            photographer=cls.rated,
+            customer=cls.customers[0],
+            rating=5,
+            comment="Amazing",
+        )
+        Review.objects.create(
+            photographer=cls.rated,
+            customer=cls.customers[1],
+            rating=4,
+        )
+        Review.objects.create(
+            photographer=cls.low,
+            customer=cls.customers[0],
+            rating=3,
+        )
+        cls.cheap = Package.objects.create(
+            profile=cls.rated_profile,
+            title="Basico",
+            description="Una hora",
+            price=100,
+        )
+        cls.premium = Package.objects.create(
+            profile=cls.rated_profile,
+            title="Premium",
+            description="Todo el dia",
+            price=500,
+        )
+        cls.pricey = Package.objects.create(
+            profile=cls.low_profile,
+            title="Caro",
+            price=300,
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def test_list_exposes_rating_average(self):
+        response = self.api.get("/api/profiles/")
+        ratings = {
+            item["slug"]: item["rating_avg"]
+            for item in response.data["results"]
+        }
+        self.assertEqual(ratings["star-studio"], 4.5)
+        self.assertEqual(ratings["low-studio"], 3.0)
+        self.assertIsNone(ratings["quiet-studio"])
+
+    def test_profile_without_reviews_returns_null_rating(self):
+        response = self.api.get("/api/profiles/quiet-studio/")
+        self.assertIsNone(response.data["rating_avg"])
+
+    def test_filter_by_min_rating_keeps_only_high_rated(self):
+        response = self.api.get("/api/profiles/?min_rating=4")
+        slugs = [item["slug"] for item in response.data["results"]]
+        self.assertEqual(slugs, ["star-studio"])
+
+    def test_min_rating_is_inclusive_at_the_boundary(self):
+        response = self.api.get("/api/profiles/?min_rating=4.5")
+        slugs = [item["slug"] for item in response.data["results"]]
+        self.assertEqual(slugs, ["star-studio"])
+
+    def test_min_rating_rejects_non_numeric_value(self):
+        response = self.api.get("/api/profiles/?min_rating=great")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_filter_by_max_price_keeps_affordable_catalogs(self):
+        response = self.api.get("/api/profiles/?max_price=150")
+        slugs = [item["slug"] for item in response.data["results"]]
+        self.assertEqual(slugs, ["star-studio"])
+
+    def test_max_price_rejects_non_numeric_value(self):
+        response = self.api.get("/api/profiles/?max_price=cheap")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_rating_and_price_filters_combine(self):
+        response = self.api.get(
+            "/api/profiles/?min_rating=4&max_price=150"
+        )
+        slugs = [item["slug"] for item in response.data["results"]]
+        self.assertEqual(slugs, ["star-studio"])
+
+    def test_rating_filter_combines_with_city(self):
+        response = self.api.get(
+            "/api/profiles/?min_rating=4&city=Nowhere"
+        )
+        self.assertEqual(response.data["count"], 0)
+
+
+class ProfilePictureUploadTests(TestCase):
+    PNG_BYTES = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+        b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+        b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
+        b"\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.photographer = User.objects.create_user(
+            username="fotoperfil",
+            email="fotoperfil@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.profile = PhotographerProfile.objects.create(
+            user=cls.photographer,
+            studio_name="Estudio Retrato",
+            slug="estudio-retrato",
+            is_published=True,
+        )
+        cls.customer = User.objects.create_user(
+            username="clientefoto",
+            email="clientefoto@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def _upload(self, content=None, content_type="image/png", name="me.png"):
+        file = SimpleUploadedFile(name, content or self.PNG_BYTES,
+                                  content_type=content_type)
+        return self.api.post(
+            "/api/profiles/picture/",
+            {"profile_picture": file},
+            format="multipart",
+        )
+
+    def test_upload_requires_authentication(self):
+        response = self._upload()
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_upload_rejects_customers(self):
+        self.api.force_authenticate(self.customer)
+        response = self._upload()
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_upload_stores_image_and_returns_url(self):
+        self.api.force_authenticate(self.photographer)
+        response = self._upload()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        url = response.data["profile_picture"]
+        self.assertTrue(url.startswith("/media/lumen/avatars/"))
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.profile_picture, url)
+
+    def test_upload_rejects_missing_file(self):
+        self.api.force_authenticate(self.photographer)
+        response = self.api.post("/api/profiles/picture/", {})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_upload_rejects_non_image_content_type(self):
+        self.api.force_authenticate(self.photographer)
+        response = self._upload(
+            content=b"not-an-image", content_type="text/plain"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_upload_rejects_files_over_two_megabytes(self):
+        self.api.force_authenticate(self.photographer)
+        oversized = b"0" * (2 * 1024 * 1024 + 1)
+        response = self._upload(content=oversized, name="big.png")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_serializer_returns_null_without_picture(self):
+        response = self.api.get("/api/profiles/estudio-retrato/")
+        self.assertIsNone(response.data["profile_picture"])
+
+    def test_serializer_returns_url_after_upload(self):
+        self.api.force_authenticate(self.photographer)
+        url = self._upload().data["profile_picture"]
+        response = self.api.get("/api/profiles/estudio-retrato/")
+        self.assertEqual(response.data["profile_picture"], url)
+
+    def test_me_endpoint_exposes_picture(self):
+        self.api.force_authenticate(self.photographer)
+        url = self._upload().data["profile_picture"]
+        response = self.api.get("/api/auth/me/")
+        self.assertEqual(response.data["profile"]["profile_picture"], url)
+
+    def test_profile_patch_cannot_inject_picture_url(self):
+        self.api.force_authenticate(self.photographer)
+        response = self.api.patch(
+            "/api/profiles/estudio-retrato/",
+            {"profile_picture": "https://evil.example/x.png"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.profile_picture, "")
+
+    def test_delete_requires_authentication(self):
+        response = self.api.delete("/api/profiles/picture/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_delete_rejects_customers(self):
+        self.api.force_authenticate(self.customer)
+        response = self.api.delete("/api/profiles/picture/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_delete_clears_picture_and_discards_file(self):
+        self.api.force_authenticate(self.photographer)
+        url = self._upload().data["profile_picture"]
+        response = self.api.delete("/api/profiles/picture/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["profile_picture"])
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.profile_picture, "")
+        detail = self.api.get("/api/profiles/estudio-retrato/")
+        self.assertIsNone(detail.data["profile_picture"])
+        me = self.api.get("/api/auth/me/")
+        self.assertIsNone(me.data["profile"]["profile_picture"])
+
+    def test_delete_without_picture_stays_idempotent(self):
+        self.api.force_authenticate(self.photographer)
+        response = self.api.delete("/api/profiles/picture/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["profile_picture"])
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.profile_picture, "")

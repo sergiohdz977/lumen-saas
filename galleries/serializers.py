@@ -25,6 +25,7 @@ class GallerySerializer(serializers.ModelSerializer):
     client_username = serializers.SerializerMethodField()
     photo_count = serializers.SerializerMethodField()
     booking_status = serializers.SerializerMethodField()
+    booking_id = serializers.SerializerMethodField()
     fully_paid = serializers.SerializerMethodField()
 
     class Meta:
@@ -36,6 +37,7 @@ class GallerySerializer(serializers.ModelSerializer):
             "client_username",
             "photo_count",
             "booking_status",
+            "booking_id",
             "fully_paid",
             "created_at",
         ]
@@ -45,6 +47,7 @@ class GallerySerializer(serializers.ModelSerializer):
             "client_username",
             "photo_count",
             "booking_status",
+            "booking_id",
             "fully_paid",
             "created_at",
         ]
@@ -61,6 +64,10 @@ class GallerySerializer(serializers.ModelSerializer):
     def get_booking_status(self, obj):
         booking = getattr(obj.shoot, "booking", None)
         return booking.status if booking else None
+
+    def get_booking_id(self, obj):
+        booking = getattr(obj.shoot, "booking", None)
+        return booking.pk if booking else None
 
     def get_fully_paid(self, obj):
         request = self.context.get("request")

@@ -2,6 +2,7 @@
 
 const params = new URLSearchParams(window.location.search);
 const token = params.get("token");
+const highlightPhotoId = Number(params.get("photo")) || null;
 
 const statusEl = document.getElementById("g-status");
 const view = document.getElementById("g-view");
@@ -33,8 +34,8 @@ function renderBanner() {
   const text = document.getElementById("g-banner-text");
   const action = document.getElementById("g-banner-action");
   const status = galleryInfo ? galleryInfo.booking_status : null;
-  const awaitingDeposit = status === "accepted_pending_deposit" || status === "accepted";
-  const awaitingBalance = status === "confirmed" && !galleryInfo.fully_paid;
+  const awaitingDeposit = status === "awaiting_payment";
+  const awaitingBalance = status === "accepted" && !galleryInfo.fully_paid;
   if (myRole !== "customer" || (!awaitingDeposit && !awaitingBalance)) {
     banner.hidden = true;
     return;
@@ -88,6 +89,24 @@ function renderGrid() {
     })
     .join("");
   document.getElementById("g-empty").hidden = photos.length > 0;
+  if (highlightPhotoId) {
+    const index = photos.findIndex((photo) => photo.id === highlightPhotoId);
+    const card = index >= 0 ? grid.querySelector(`[data-index="${index}"]`) : null;
+    if (card) {
+      card.classList.add("photo-highlight");
+    }
+  }
+}
+
+function focusHighlightedPhoto() {
+  if (!highlightPhotoId) {
+    return;
+  }
+  const index = photos.findIndex((photo) => photo.id === highlightPhotoId);
+  const card = index >= 0 ? grid.querySelector(`[data-index="${index}"]`) : null;
+  if (card) {
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 }
 
 async function loadMe() {
@@ -203,6 +222,7 @@ async function loadGallery() {
     renderBanner();
     statusEl.hidden = true;
     view.hidden = false;
+    focusHighlightedPhoto();
   } catch (error) {
     console.error(error);
     statusEl.textContent =
@@ -346,6 +366,20 @@ document.addEventListener("keydown", (event) => {
   } else if (event.key === "ArrowLeft") {
     stepLightbox(-1);
   }
+});
+
+document.getElementById("g-banner-action").addEventListener("click", (event) => {
+  // SIMULACIÓN FRONTEND: El flujo real crea una Checkout Session en Django (start_checkout) y redirige a Stripe. Aquí simulamos el pago para la demo.
+  if (!STRIPE_DEMO_MODE || !galleryInfo || !galleryInfo.booking_id) {
+    return;
+  }
+  event.preventDefault();
+  const awaitingDeposit = galleryInfo.booking_status === "awaiting_payment";
+  openSimulatedCheckout(
+    galleryInfo.booking_id,
+    awaitingDeposit ? "deposit" : "balance",
+    { title: document.getElementById("g-title").textContent }
+  );
 });
 
 initHeader();

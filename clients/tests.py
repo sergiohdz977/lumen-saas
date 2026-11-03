@@ -160,3 +160,25 @@ class ClientEndpointsTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         client = Client.objects.get(name="Sin vincular")
         self.assertIsNone(client.user)
+
+    def test_api_created_client_is_flagged_as_manual(self):
+        self.api.force_authenticate(self.photographer_a)
+        payload = {
+            "name": "Manual Cliente",
+            "phone": "+5355555555",
+            "is_manual": False,
+        }
+        response = self.api.post("/api/clients/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data["is_manual"])
+        client = Client.objects.get(name="Manual Cliente")
+        self.assertTrue(client.is_manual)
+        self.assertEqual(client.photographer, self.photographer_a)
+
+    def test_client_is_not_manual_by_default(self):
+        client = Client.objects.create(
+            photographer=self.photographer_a,
+            user=self.customer,
+            name="Viene de una reserva",
+        )
+        self.assertFalse(client.is_manual)

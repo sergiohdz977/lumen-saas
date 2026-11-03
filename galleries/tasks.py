@@ -100,5 +100,6 @@ def gallery_ready_email(gallery_id):
             client.user,
             "Your photos are ready",
             f'The photos of "{gallery.shoot.title}" are now available',
+            link=f"gallery.html?token={signing.dumps(str(gallery.pk), salt=SHARE_SALT)}",
         )
     return to_email

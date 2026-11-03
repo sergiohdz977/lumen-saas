@@ -336,3 +336,131 @@ class MeEndpointTests(TestCase):
         self.assertEqual(response.data["role"], User.ROLE_PHOTOGRAPHER)
         self.assertEqual(response.data["profile"]["studio_name"], "ME Studio")
         self.assertNotIn("password", str(response.data))
+
+
+class AccountUpdateTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            username="cuenta",
+            email="cuenta@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.other = User.objects.create_user(
+            username="ocupado",
+            email="ocupado@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+        self.api.force_authenticate(user=self.user)
+
+    def test_patch_requires_authentication(self):
+        response = APIClient().patch(
+            "/api/auth/me/", {"email": "x@test.com"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_patch_updates_email(self):
+        response = self.api.patch(
+            "/api/auth/me/", {"email": "nuevo@test.com"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "nuevo@test.com")
+
+    def test_patch_updates_username(self):
+        response = self.api.patch(
+            "/api/auth/me/", {"username": "nuevonombre"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "nuevonombre")
+
+    def test_patch_rejects_duplicate_email(self):
+        response = self.api.patch(
+            "/api/auth/me/", {"email": "ocupado@test.com"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_rejects_invalid_email(self):
+        response = self.api.patch(
+            "/api/auth/me/", {"email": "no-es-email"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_rejects_duplicate_username(self):
+        response = self.api.patch(
+            "/api/auth/me/", {"username": "ocupado"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_rejects_short_username(self):
+        response = self.api.patch(
+            "/api/auth/me/", {"username": "ab"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_never_changes_role(self):
+        response = self.api.patch(
+            "/api/auth/me/",
+            {"role": "photographer", "email": "altro@test.com"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.role, User.ROLE_CUSTOMER)
+        self.assertEqual(response.data["role"], User.ROLE_CUSTOMER)
+
+
+class ChangePasswordTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            username="clave",
+            email="clave@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+        self.api.force_authenticate(user=self.user)
+
+    def test_change_requires_authentication(self):
+        response = APIClient().post(
+            "/api/auth/change-password/",
+            {"current_password": "x", "new_password": "abcdefgh"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_change_rejects_wrong_current_password(self):
+        response = self.api.post(
+            "/api/auth/change-password/",
+            {"current_password": "nope", "new_password": "abcdefgh"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_change_rejects_short_new_password(self):
+        response = self.api.post(
+            "/api/auth/change-password/",
+            {"current_password": "secret123", "new_password": "abc"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_change_updates_password(self):
+        response = self.api.post(
+            "/api/auth/change-password/",
+            {"current_password": "secret123", "new_password": "nuevoclave1"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("nuevoclave1"))
+        self.assertFalse(self.user.check_password("secret123"))

@@ -10,6 +10,9 @@ class Notification(models.Model):
     )
     title = models.CharField(max_length=200)
     message = models.TextField(blank=True)
+    # Frontend destination, e.g. "dashboard.html?tab=requests" or
+    # "gallery.html?token=...&photo=12". Empty = no navigation.
+    link = models.CharField(max_length=300, blank=True, default="")
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

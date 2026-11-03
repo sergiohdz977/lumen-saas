@@ -4,7 +4,11 @@ const loadMoreBtn = document.getElementById("load-more");
 const searchForm = document.getElementById("search-form");
 const searchCity = document.getElementById("search-city");
 const searchSpecialty = document.getElementById("search-specialty");
+const searchRating = document.getElementById("search-rating");
+const searchPrice = document.getElementById("search-price");
 const searchClear = document.getElementById("search-clear");
+const searchMore = document.getElementById("search-more");
+const searchExtra = document.getElementById("search-extra");
 
 const authStatus = document.getElementById("auth-status");
 const loginModal = document.getElementById("login-modal");
@@ -21,21 +25,30 @@ function cardHtml(profile) {
   const initial = (name || "?").charAt(0).toUpperCase();
   const planBadge =
     profile.plan === "pro" ? '<span class="badge badge-pro">PRO</span>' : "";
+  const avatar = profile.profile_picture
+    ? `<img class="avatar avatar-img" src="${escapeHtml(
+        profile.profile_picture
+      )}" alt="${escapeHtml(name)}" loading="lazy">`
+    : `<div class="avatar">${escapeHtml(initial)}</div>`;
   const chips = (profile.specialties || "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)
     .map((item) => `<span class="chip">${escapeHtml(item)}</span>`)
     .join("");
+  const rating =
+    profile.rating_avg !== null && profile.rating_avg !== undefined
+      ? `<span class="card-rating">★ ${Number(profile.rating_avg).toFixed(1)}</span>`
+      : '<span class="card-rating card-rating--none">★ New</span>';
 
   return `
     <a class="card-link" href="profile.html?slug=${encodeURIComponent(profile.slug)}">
       <article class="card">
         <div class="card-top">
-          <div class="avatar">${escapeHtml(initial)}</div>
+          ${avatar}
           ${planBadge}
         </div>
-        <h2>${escapeHtml(name)}</h2>
+        <h2>${escapeHtml(name)} ${rating}</h2>
         <p class="meta">${escapeHtml(profile.city || "Location not set")} · @${escapeHtml(
           profile.username
         )}</p>
@@ -56,6 +69,13 @@ function listUrl() {
   }
   if (specialty) {
     params.set("specialty", specialty);
+  }
+  if (searchRating.value) {
+    params.set("min_rating", searchRating.value);
+  }
+  const price = searchPrice.value.trim();
+  if (price) {
+    params.set("max_price", price);
   }
   const query = params.toString();
   searchClear.hidden = !query;
@@ -130,9 +150,7 @@ async function verifyToken() {
   }
   try {
     const response = await apiFetch("/notifications/", { silentAuth: true });
-    if (response.ok) {
-      authStatus.textContent = " · JWT ✓";
-    } else {
+    if (!response.ok) {
       header.update();
     }
   } catch (error) {
@@ -261,7 +279,16 @@ searchForm.addEventListener("submit", (event) => {
 searchClear.addEventListener("click", () => {
   searchCity.value = "";
   searchSpecialty.value = "";
+  searchRating.value = "";
+  searchPrice.value = "";
   loadPage(listUrl(), { replace: true });
+});
+
+searchMore.addEventListener("click", () => {
+  const willOpen = searchExtra.hidden;
+  searchExtra.hidden = !willOpen;
+  searchMore.textContent = willOpen ? "Hide filters" : "More filters";
+  searchMore.classList.toggle("is-active", willOpen);
 });
 loadMoreBtn.addEventListener("click", () => {
   if (nextUrl) {

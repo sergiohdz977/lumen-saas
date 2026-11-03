@@ -155,11 +155,117 @@ function showToast(message) {
   }, 4000);
 }
 
+/* Demo mode: this demo cannot use a real Stripe account (no verified
+   business / country restrictions), so the frontend simulates checkout
+   through /api/payments/simulate/. The real flow only runs when this
+   flag is false (payments/services.py -> start_checkout). */
+const STRIPE_DEMO_MODE = true;
+
+function openSimulatedCheckout(bookingId, kind, details = {}) {
+  const closeSim = () => {
+    const current = document.getElementById("sim-checkout-modal");
+    if (current) {
+      current.hidden = true;
+    }
+    document.body.style.overflow = "";
+  };
+  let modal = document.getElementById("sim-checkout-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "sim-checkout-modal";
+    modal.className = "modal";
+    modal.hidden = true;
+    modal.innerHTML = `
+      <div class="modal-panel">
+        <button class="modal-close" id="sim-checkout-close" type="button" aria-label="Close">&times;</button>
+        <h3>Simulated Stripe Checkout</h3>
+        <div class="sim-rows">
+          <div class="kv"><span>Booking</span><strong id="sim-booking"></strong></div>
+          <div class="kv"><span>Type</span><strong id="sim-kind"></strong></div>
+          <div class="kv"><span>Amount to pay</span><strong id="sim-amount">Loading...</strong></div>
+        </div>
+        <p class="meta">No card is charged. The payment is settled inside Lumen for the demo.</p>
+        <div class="form-actions">
+          <button class="btn" id="sim-confirm" type="button" disabled>Simulate Successful Payment</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", (event) => {
+      if (
+        event.target === modal ||
+        event.target.closest("#sim-checkout-close")
+      ) {
+        closeSim();
+      }
+    });
+    document
+      .getElementById("sim-confirm")
+      .addEventListener("click", async () => {
+        const button = document.getElementById("sim-confirm");
+        button.disabled = true;
+        try {
+          const response = await apiFetch("/payments/simulate/", {
+            method: "POST",
+            body: {
+              booking: Number(modal.dataset.booking),
+              kind: modal.dataset.kind,
+            },
+          });
+          if (!response.ok) {
+            showToast(await readError(response));
+            button.disabled = false;
+            return;
+          }
+          closeSim();
+          showToast("Payment simulated successfully. Refreshing...");
+          window.setTimeout(() => window.location.reload(), 1200);
+        } catch (error) {
+          console.error(error);
+          showToast("Could not reach the API.");
+          button.disabled = false;
+        }
+      });
+  }
+  modal.dataset.booking = String(bookingId);
+  modal.dataset.kind = kind;
+  document.getElementById("sim-booking").textContent =
+    details.title || `#${bookingId}`;
+  document.getElementById("sim-kind").textContent =
+    kind === "balance" ? "Remaining balance (80%)" : "Deposit (20%)";
+  const amountEl = document.getElementById("sim-amount");
+  amountEl.textContent = "Loading...";
+  const confirm = document.getElementById("sim-confirm");
+  confirm.disabled = true;
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+  confirm.focus();
+  apiFetch(
+    `/payments/simulate/?booking=${encodeURIComponent(
+      bookingId
+    )}&kind=${encodeURIComponent(kind)}`
+  )
+    .then(async (response) => {
+      if (!response.ok) {
+        showToast(await readError(response));
+        closeSim();
+        return;
+      }
+      const data = await response.json();
+      amountEl.textContent = `$${(Number(data.amount_cents) / 100).toFixed(2)}`;
+      confirm.disabled = false;
+    })
+    .catch((error) => {
+      console.error(error);
+      showToast("Could not reach the API.");
+      closeSim();
+    });
+}
+
 const STATUS_LABELS = {
-  pending: "pending",
+  requested: "requested",
+  awaiting_payment: "awaiting payment",
   accepted: "accepted",
-  accepted_pending_deposit: "awaiting deposit",
-  confirmed: "confirmed",
+  completed: "completed",
   rejected: "rejected",
   cancelled: "cancelled",
 };
@@ -209,10 +315,12 @@ function initHeader({ onLogin, onSignup } = {}) {
   const authStatus = document.getElementById("auth-status");
   const navPhotos = document.querySelector("[data-nav-photos]");
   const navPublic = document.querySelector("[data-nav-public]");
+  const navDash = document.querySelector("[data-nav-dash]");
   const onIndex =
     window.location.pathname.endsWith("index.html") ||
     window.location.pathname === "/" ||
     window.location.pathname === "";
+  const onDashboard = window.location.pathname.endsWith("dashboard.html");
 
   const update = () => {
     const logged = isLoggedIn();
@@ -235,7 +343,13 @@ function initHeader({ onLogin, onSignup } = {}) {
       const isPhotographer =
         localStorage.getItem(STORAGE.role) === "photographer";
       navPhotos.hidden = isPhotographer;
-      navPublic.hidden = !isPhotographer;
+      navPublic.hidden = !isPhotographer || onIndex;
+    }
+    if (navDash) {
+      const isCustomer = localStorage.getItem(STORAGE.role) === "customer";
+      navDash.textContent = isCustomer ? "My Bookings" : "Dashboard";
+      // Already on the dashboard: the link would only point at itself.
+      navDash.hidden = onDashboard;
     }
   };
 
@@ -273,7 +387,9 @@ function initHeader({ onLogin, onSignup } = {}) {
   return { update };
 }
 
-/* Header bell: unread badge + floating panel with the 3 latest items. */
+/* Header bell: unread badge + floating panel with the 3 latest items.
+   refreshBellBadge() lets other pages (the dashboard) re-sync the badge. */
+function refreshBellBadge() {}
 function initBell() {
   const area = document.getElementById("bell-area");
   if (!area) {
@@ -330,7 +446,13 @@ function initBell() {
       list.innerHTML = items
         .map(
           (item) => `
-        <div class="bell-item${item.is_read ? "" : " is-unread"}">
+        <${
+          item.link ? "a" : "div"
+        } class="bell-item${item.is_read ? "" : " is-unread"}"${
+          item.link
+            ? ` href="${escapeHtml(item.link)}" data-note-id="${item.id}"`
+            : ` data-note-id="${item.id}"`
+        }>
           <strong>${escapeHtml(item.title)}</strong>
           ${
             item.message
@@ -340,7 +462,7 @@ function initBell() {
           <span class="meta bell-time">${formatDate(item.created_at, {
             withTime: true,
           })}</span>
-        </div>`
+        </${item.link ? "a" : "div"}>`
         )
         .join("");
     } catch (error) {
@@ -349,13 +471,51 @@ function initBell() {
     }
   }
 
-  button.addEventListener("click", (event) => {
+  list.addEventListener("click", async (event) => {
+    const item = event.target.closest("[data-note-id]");
+    if (!item) {
+      return;
+    }
+    const href = item.getAttribute("href");
+    if (href) {
+      // Follow the deep link once the notification counts are clean.
+      event.preventDefault();
+      if (typeof window.lumenNavigate === "function") {
+        // Already on the dashboard: switch tabs without a reload.
+        window.lumenNavigate(href);
+        panel.hidden = true;
+        button.setAttribute("aria-expanded", "false");
+        loadPanel();
+      } else {
+        window.location.href = href;
+      }
+    } else {
+      await apiFetch(`/notifications/${item.dataset.noteId}/read/`, {
+        method: "POST",
+        silentAuth: true,
+      }).catch(() => null);
+      loadBadge();
+    }
+  });
+
+  button.addEventListener("click", async (event) => {
     event.stopPropagation();
     const opening = panel.hidden;
     panel.hidden = !opening;
     button.setAttribute("aria-expanded", String(opening));
     if (opening) {
       loadPanel();
+      // Seeing the notifications marks them read: the badge must clear.
+      try {
+        await apiFetch("/notifications/read-all/", {
+          method: "POST",
+          silentAuth: true,
+        });
+        document.dispatchEvent(new CustomEvent("notifications:read"));
+      } catch (error) {
+        console.error(error);
+      }
+      loadBadge();
     }
   });
   document.addEventListener("click", (event) => {
@@ -369,6 +529,48 @@ function initBell() {
     }
   });
 
+  /* Live badge: the notifications WebSocket pushes a message whenever a
+     notification is created (chat messages, offers, payments…). Refresh the
+     badge and let the page react through the `notifications:push` event. */
+  let badgeSocket = null;
+  function connectBadgeSocket() {
+    if (!isLoggedIn() || badgeSocket) {
+      return;
+    }
+    const token = getAccess();
+    if (!token) {
+      return;
+    }
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    try {
+      badgeSocket = new WebSocket(
+        `${protocol}://${
+          window.location.host
+        }/ws/notifications/?token=${encodeURIComponent(token)}`
+      );
+    } catch (error) {
+      badgeSocket = null;
+      return;
+    }
+    badgeSocket.onmessage = () => {
+      loadBadge();
+      document.dispatchEvent(new CustomEvent("notifications:push"));
+    };
+    badgeSocket.onclose = () => {
+      badgeSocket = null;
+      if (isLoggedIn()) {
+        window.setTimeout(connectBadgeSocket, 5000);
+      }
+    };
+    badgeSocket.onerror = () => {
+      try {
+        badgeSocket.close();
+      } catch (error) {
+        badgeSocket = null;
+      }
+    };
+  }
+
   const sync = () => {
     const logged = isLoggedIn();
     area.hidden = !logged;
@@ -379,10 +581,12 @@ function initBell() {
     } else if (!badgeLoaded) {
       badgeLoaded = true;
       loadBadge();
+      connectBadgeSocket();
     }
   };
   headerUpdaters.push(sync);
   sync();
+  refreshBellBadge = loadBadge;
 }
 
 /* Redirect to the login screen unless a session exists. */

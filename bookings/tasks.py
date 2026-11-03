@@ -46,8 +46,8 @@ def enforce_deposit_deadline(booking_id):
     )
     if booking is None:
         return None
-    if booking.status != BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT:
-        # Already confirmed, rejected or cancelled: nothing to do.
+    if booking.status != BookingRequest.Status.AWAITING_PAYMENT:
+        # Already paid, rejected or cancelled: nothing to do.
         return None
     if (
         booking.deposit_deadline is None
@@ -73,6 +73,7 @@ def enforce_deposit_deadline(booking_id):
             f'The deposit for "{booking.package.title}" was not paid in time, '
             "so the booking was cancelled."
         ),
+        link=f"dashboard.html?tab=requests&item={booking.pk}",
     )
     notify(
         photographer,
@@ -82,5 +83,6 @@ def enforce_deposit_deadline(booking_id):
             f'"{booking.package.title}" was not paid within '
             f"{settings.DEPOSIT_DEADLINE_HOURS} hours."
         ),
+        link=f"dashboard.html?tab=requests&item={booking.pk}",
     )
     return booking.pk

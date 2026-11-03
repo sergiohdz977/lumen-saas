@@ -26,7 +26,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
 }
 
@@ -53,13 +53,26 @@ body {
 }
 
 .logo {
-  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
   font-size: 1.25rem;
   letter-spacing: 0.02em;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.logo-mark {
+  color: var(--accent);
+  flex-shrink: 0;
+  display: block;
 }
 
 .logo-dot {
   color: var(--accent);
+  font-size: 1.3em;
+  line-height: 0;
 }
 
 nav a {
@@ -133,6 +146,65 @@ nav a:hover {
   color: var(--on-accent);
   font-weight: 800;
   font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-img {
+  object-fit: cover;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
+.pp-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pp-preview {
+  flex-shrink: 0;
+}
+
+.pp-preview--clickable {
+  cursor: pointer;
+}
+
+.pp-preview--clickable:hover {
+  opacity: 0.85;
+}
+
+.pp-viewer-img {
+  display: block;
+  width: 100%;
+  max-width: min(540px, 100%);
+  max-height: min(540px, 70vh);
+  object-fit: contain;
+  border-radius: var(--radius);
+  margin: 0 auto 8px;
+  background: var(--overlay);
+}
+
+.pp-img {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.pp-img--empty {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 800;
+  font-size: 1.6rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -395,6 +467,68 @@ nav a:hover {
 
 .modal-close:hover {
   color: var(--text);
+}
+
+.modal-panel-crop {
+  max-width: 400px;
+}
+
+.modal-panel-viewer {
+  max-width: 620px;
+}
+
+.crop-stage {
+  position: relative;
+  width: min(300px, 100%);
+  height: min(300px, 100vw - 120px);
+  margin: 0 auto 14px;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--overlay);
+  touch-action: none;
+  cursor: grab;
+}
+
+.crop-stage:active {
+  cursor: grabbing;
+}
+
+.crop-stage img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  transform-origin: center center;
+}
+
+.crop-frame {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 0 9999px var(--overlay);
+}
+
+.crop-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.crop-controls input[type="range"] {
+  flex: 1;
+}
+
+.crop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 #login-form {
@@ -841,6 +975,21 @@ nav a:hover {
   color: #4b5563;
 }
 
+.status-requested {
+  background: #f6e7c1;
+  color: #8a6d1a;
+}
+
+.status-awaiting_payment {
+  background: #f6e7c1;
+  color: #8a6d1a;
+}
+
+.status-completed {
+  background: #d7efd9;
+  color: #1f6b34;
+}
+
 .status-rejected {
   background: #f6d7d7;
   color: #9b2c2c;
@@ -988,8 +1137,9 @@ label.check-row input {
   margin: 0 0 22px;
 }
 
-.search-bar input {
-  flex: 1 1 200px;
+.search-bar input,
+.search-bar select {
+  flex: 1 1 170px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -998,9 +1148,30 @@ label.check-row input {
   padding: 11px 14px;
 }
 
-.search-bar input:focus {
+.search-bar input:focus,
+.search-bar select:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.search-extra {
+  display: contents;
+}
+
+#search-more.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.card-rating {
+  color: #c98a00;
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.card-rating--none {
+  color: var(--muted, #868e96);
 }
 
 /* ----------------------------- auth modal tabs --------------------------- */
@@ -1160,6 +1331,26 @@ label.check-row input {
   display: block;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.req-review {
+  flex-basis: 100%;
+  padding-top: 10px;
+  margin-top: 2px;
+  border-top: 1px dashed var(--line);
+}
+
+.req-review .req-msg {
+  margin: 6px 0 0;
+}
+
+.ov-card:not([data-goto]) {
+  cursor: default;
+}
+
+.ov-card:not([data-goto]):hover {
+  border-color: var(--line);
+  transform: none;
 }
 
 .price-inline {
@@ -1349,6 +1540,18 @@ label.check-row input {
 .status-paid {
   background: #d7efd9;
   color: #1f6b34;
+}
+
+.ov-card.ov-ok .ov-value {
+  color: #1f6b34;
+}
+
+.kv strong.stripe-demo {
+  color: #1f6b34;
+}
+
+.sim-rows {
+  margin: 14px 0;
 }
 
 .status-failed {
@@ -1546,4 +1749,749 @@ label.check-row input {
 
 .bell-all:hover {
   background: var(--panel-2);
+}
+
+
+/* Notifications: clickable rows, hover feedback, focus styles */
+.notif,
+.bell-item {
+  transition: transform 0.18s ease, background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.notif.notif-link {
+  cursor: pointer;
+}
+
+.notif.notif-link:hover,
+.notif.notif-link:focus-visible,
+.bell-item:hover,
+.bell-item:focus-visible {
+  transform: scale(1.03);
+  background: var(--panel-2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.notif.notif-link:focus-visible,
+.bell-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+a.bell-item {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Photo highlighted from a favorite notification deep link */
+.photo-card.photo-highlight {
+  outline: 3px solid #f59e0b;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.3);
+  animation: photo-pulse 1s ease-in-out 3;
+}
+
+@keyframes photo-pulse {
+  50% {
+    box-shadow: 0 0 0 12px rgba(245, 158, 11, 0.12);
+  }
+}
+
+/* Payments: connected state and history table */
+.setup-block.setup-connected {
+  background: #f0f9f2;
+  border: 1px solid #cdebd4;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.setup-connected-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: #1f6b34;
+  font-size: 1.02rem;
+}
+
+.setup-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #1f6b34;
+  color: #fff;
+  font-size: 13px;
+}
+
+.pay-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 14px;
+  font-size: 0.92rem;
+}
+
+.pay-table th {
+  text-align: left;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pay-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.pay-table tbody tr:hover td {
+  background: var(--panel-2);
+}
+
+
+/* Dashboard notifications tab: entrance animation + card feel */
+.notif {
+  position: relative;
+  padding: 12px;
+  border-radius: 12px;
+  animation: notif-in 0.32s ease backwards;
+}
+
+.notif.unread {
+  background: rgba(194, 100, 58, 0.06);
+}
+
+.notif.notif-link .n-title {
+  padding-right: 26px;
+}
+
+.notif-go {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.notif.notif-link:hover .notif-go,
+.notif.notif-link:focus-visible .notif-go {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@keyframes notif-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Mark-read button feedback */
+.notif .btn-ghost {
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.notif .btn-ghost:hover {
+  background: var(--panel-2);
+}
+
+
+/* Row the notification points at: slight, persistent highlight */
+.row-highlight {
+  background: rgba(245, 158, 11, 0.12);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.45);
+  animation: row-glow 1.5s ease-in-out 2;
+}
+
+@keyframes row-glow {
+  50% {
+    box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.45),
+      0 0 0 4px rgba(245, 158, 11, 0.22);
+  }
+}
+
+
+/* Requests tab: same grow-on-hover as the notifications */
+#requests-list .request-row {
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+#requests-list .request-row:hover {
+  transform: scale(1.03);
+  background: var(--panel-2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+
+/* Galleries tab: same grow-on-hover */
+#galleries-list .request-row {
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+#galleries-list .request-row:hover {
+  transform: scale(1.03);
+  background: var(--panel-2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+
+/* Booking request rows: clickable, with a persistent open state */
+#requests-list .request-row.is-clickable {
+  cursor: pointer;
+}
+
+#requests-list .request-row.is-open {
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--hover-line);
+}
+
+.req-open {
+  margin-left: auto;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--muted);
+}
+
+
+/* Booking request detail: details, negotiation actions and chat */
+.request-detail {
+  margin-top: 18px;
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.detail-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-title strong {
+  font-size: 1.05rem;
+}
+
+.detail-price {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-price strong {
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+.detail-note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px dashed var(--hover-line);
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 4px 16px;
+  margin-top: 12px;
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.detail-actions .meta {
+  font-size: 0.85rem;
+}
+
+
+/* Per-booking chat inside the request detail */
+.chat-box {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.chat-list {
+  max-height: 280px;
+  min-height: 80px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.chat-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 78%;
+}
+
+.chat-line.chat-mine {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.chat-line.chat-theirs {
+  align-self: flex-start;
+}
+
+.chat-line.chat-system {
+  align-self: center;
+  max-width: 92%;
+  flex-direction: row;
+  gap: 8px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: var(--panel-2);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+
+.chat-bubble {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-line.chat-mine .chat-bubble {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.chat-author {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.chat-time {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.chat-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chat-form input {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  color: inherit;
+}
+
+.chat-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+
+/* Requests tab: filter chips (All / Pending / Accepted / Archived) */
+.request-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.filter-chip:hover {
+  border-color: var(--hover-line);
+  color: var(--text);
+}
+
+.filter-chip.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.filter-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.filter-chip.is-active .filter-count {
+  background: rgba(255, 247, 239, 0.25);
+  color: var(--on-accent);
+}
+
+
+/* Gmail/Stripe-style slide-in drawer for the booking details */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(47, 39, 33, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 40;
+}
+
+.drawer-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.request-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: -18px 0 44px rgba(0, 0, 0, 0.22);
+  z-index: 50;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.request-drawer.is-open {
+  transform: translateX(0);
+}
+
+@media (min-width: 768px) {
+  .request-drawer {
+    width: 50vw;
+  }
+}
+
+@media (min-width: 1024px) {
+  .request-drawer {
+    width: 33vw;
+    min-width: 420px;
+    max-width: 560px;
+  }
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.drawer-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.drawer-close {
+  border: 0;
+  background: transparent;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.drawer-close:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+
+.drawer-actions {
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  padding: 12px 18px;
+  background: var(--panel);
+}
+
+.drawer-actions:empty {
+  display: none;
+}
+
+.detail-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+/* owner banner on public profile */
+.owner-banner {
+  background: #eceef1;
+  border: 1px solid #dfe3e8;
+  color: #5b6470;
+  font-size: 0.83rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  margin: 14px 0 4px;
+}
+
+/* package admin cards */
+.pkg-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.packages-grid > .meta {
+  grid-column: 1 / -1;
+}
+
+/* Jobs sub-navigation (Requests / Shoots / Galleries) */
+.jobs-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 2px 0 14px;
+}
+
+/* ---------- public profile: cover, About Me, collections ---------- */
+.cover-banner {
+  position: relative;
+  margin: -26px -26px 8px;
+  height: 230px;
+  overflow: hidden;
+  background: var(--panel-2);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.cover-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 45%, rgba(10, 12, 16, 0.5));
+}
+
+.profile-hero.has-cover .avatar-lg {
+  margin-top: -64px;
+  border: 4px solid var(--panel);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
+  position: relative;
+  z-index: 2;
+}
+
+.profile-hero.has-cover .profile-headings h1 {
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+.about-bio {
+  color: var(--text);
+  line-height: 1.75;
+  font-size: 1.02rem;
+  margin: 0 0 16px;
+  white-space: pre-line;
+}
+
+.about-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.about-stats .chip {
+  font-size: 0.8rem;
+  padding: 6px 13px;
+}
+
+.about-equipment {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 0.87rem;
+  line-height: 1.55;
+  margin: 8px 0 0;
+}
+
+.collection-block {
+  margin-bottom: 8px;
+}
+
+.collection-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 1.02rem;
+  margin: 26px 0 14px;
+}
+
+.collection-count {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
+/* ---------- dashboard: cover upload + collections ---------- */
+.cover-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 4px 0 18px;
+}
+
+.cover-preview {
+  width: 180px;
+  height: 70px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.cover-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-caption {
+  padding: 8px 12px 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.chip-x {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0 0 0 5px;
+}
+
+.chip-x:hover {
+  color: var(--accent);
+}
+
+.filter-chip[data-collection] {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* portfolio tab photos open a preview on click */
+.photo-strip .photo-card {
+  cursor: pointer;
+}
+
+.photo-strip .photo-card:hover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+/* file picker row (portfolio photo upload from local disk) */
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.file-row .meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* clients table (Settings > Clients) */
+.client-table td:first-child {
+  white-space: nowrap;
+}
+
+.chip--manual {
+  background: transparent;
+  border-style: dashed;
+  color: var(--muted);
 }

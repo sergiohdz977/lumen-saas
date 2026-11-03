@@ -6,6 +6,7 @@ db.sqlite3
 .vscode/
 /media/
 /staticfiles/
+/logs/
 
 # Local scripts (machine-specific paths); only the demo launcher is shared.
 *.bat

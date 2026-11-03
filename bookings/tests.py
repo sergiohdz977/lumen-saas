@@ -101,18 +101,18 @@ class BookingEndpointsTests(TestCase):
         self.api.force_authenticate(self.customer)
         response = self.api.post("/api/bookings/", self.valid_payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["status"], "pending")
+        self.assertEqual(response.data["status"], "requested")
         self.assertEqual(response.data["customer_username"], "maria")
         booking = BookingRequest.objects.get(package=self.package, message="I want to book")
         self.assertEqual(booking.customer, self.customer)
-        self.assertEqual(booking.status, BookingRequest.Status.PENDING)
+        self.assertEqual(booking.status, BookingRequest.Status.REQUESTED)
 
     def test_status_cannot_be_forced_on_create(self):
         self.api.force_authenticate(self.customer)
         payload = {**self.valid_payload, "status": "accepted"}
         response = self.api.post("/api/bookings/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["status"], "pending")
+        self.assertEqual(response.data["status"], "requested")
 
     def test_cannot_book_hidden_profile_package(self):
         self.api.force_authenticate(self.customer)
@@ -173,12 +173,12 @@ class BookingEndpointsTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            response.data["status"], "accepted_pending_deposit"
+            response.data["status"], "awaiting_payment"
         )
         self.pending_booking.refresh_from_db()
         self.assertEqual(
             self.pending_booking.status,
-            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
+            BookingRequest.Status.AWAITING_PAYMENT,
         )
         self.assertIsNotNone(self.pending_booking.deposit_deadline)
 
@@ -198,7 +198,7 @@ class BookingEndpointsTests(TestCase):
             f"/api/bookings/{self.pending_booking.pk}/accept/", format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("pending", str(response.data))
+        self.assertIn("requested", str(response.data))
 
     def test_photographer_cannot_accept_others_booking(self):
         package_beto = Package.objects.create(
@@ -281,7 +281,7 @@ class AcceptSideEffectsTests(TestCase):
         self.booking.refresh_from_db()
         self.assertEqual(
             self.booking.status,
-            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
+            BookingRequest.Status.AWAITING_PAYMENT,
         )
         self.assertIsNotNone(self.booking.deposit_deadline)
         client = Client.objects.get(photographer=self.ana)
@@ -329,7 +329,7 @@ class AcceptSideEffectsTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("that day", str(response.data))
         self.booking.refresh_from_db()
-        self.assertEqual(self.booking.status, BookingRequest.Status.PENDING)
+        self.assertEqual(self.booking.status, BookingRequest.Status.REQUESTED)
         self.assertEqual(Shoot.objects.count(), 1)
         self.assertEqual(
             Client.objects.filter(photographer=self.ana).count(), 1
@@ -472,7 +472,7 @@ class MarketplaceJourneyTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         booking_id = response.data["id"]
-        self.assertEqual(response.data["status"], "pending")
+        self.assertEqual(response.data["status"], "requested")
 
         self.api.force_authenticate(ana)
         response = self.api.get("/api/bookings/")
@@ -480,7 +480,7 @@ class MarketplaceJourneyTests(TestCase):
         response = self.api.post(
             f"/api/bookings/{booking_id}/accept/", format="json"
         )
-        self.assertEqual(response.data["status"], "accepted_pending_deposit")
+        self.assertEqual(response.data["status"], "awaiting_payment")
 
         shoot = Shoot.objects.get()
         self.assertEqual(shoot.status, Shoot.Status.BOOKED)
@@ -554,7 +554,7 @@ class MarketplaceJourneyTests(TestCase):
         response = self.api.post(
             f"/api/bookings/{retry_id}/accept/", format="json"
         )
-        self.assertEqual(response.data["status"], "accepted_pending_deposit")
+        self.assertEqual(response.data["status"], "awaiting_payment")
         self.assertEqual(Shoot.objects.count(), 1)
         self.assertEqual(Client.objects.count(), 1)
 
@@ -671,7 +671,7 @@ class BookingStatusAuditTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.pending_booking.refresh_from_db()
-        self.assertEqual(self.pending_booking.status, "pending")
+        self.assertEqual(self.pending_booking.status, "requested")
 
 
 class BookingNotificationTests(TestCase):
@@ -775,7 +775,7 @@ class DepositDeadlineTests(TestCase):
         self.assertEqual(kwargs["eta"], self.booking.deposit_deadline)
 
     def _make_accepted(self, deadline):
-        self.booking.status = BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT
+        self.booking.status = BookingRequest.Status.AWAITING_PAYMENT
         self.booking.deposit_deadline = deadline
         self.booking.save(update_fields=["status", "deposit_deadline"])
         client, _ = Client.objects.get_or_create(
@@ -813,18 +813,18 @@ class DepositDeadlineTests(TestCase):
         self.booking.refresh_from_db()
         self.assertEqual(
             self.booking.status,
-            BookingRequest.Status.ACCEPTED_PENDING_DEPOSIT,
+            BookingRequest.Status.AWAITING_PAYMENT,
         )
         self.assertTrue(Shoot.objects.filter(pk=shoot.pk).exists())
 
     def test_confirmed_booking_is_not_cancelled(self):
         shoot = self._make_accepted(timezone.now() - timedelta(hours=1))
         BookingRequest.objects.filter(pk=self.booking.pk).update(
-            status=BookingRequest.Status.CONFIRMED
+            status=BookingRequest.Status.ACCEPTED
         )
         enforce_deposit_deadline(self.booking.pk)
         self.booking.refresh_from_db()
-        self.assertEqual(self.booking.status, BookingRequest.Status.CONFIRMED)
+        self.assertEqual(self.booking.status, BookingRequest.Status.ACCEPTED)
         self.assertTrue(Shoot.objects.filter(pk=shoot.pk).exists())
 
     def test_legacy_accepted_without_deadline_is_kept(self):

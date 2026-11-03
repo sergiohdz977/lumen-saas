@@ -12,6 +12,9 @@ const bookModal = document.getElementById("book-modal");
 const bookForm = document.getElementById("book-form");
 const bookDate = document.getElementById("book-date");
 const bookMessage = document.getElementById("book-message");
+const bookLocation = document.getElementById("book-location");
+const bookTime = document.getElementById("book-time");
+const bookNotes = document.getElementById("book-notes");
 const bookError = document.getElementById("book-error");
 const reviewModal = document.getElementById("review-modal");
 const reviewForm = document.getElementById("review-form");
@@ -24,13 +27,29 @@ let lbIndex = 0;
 let myRole = null;
 let myId = null;
 let photographerId = null;
+let packageItems = [];
+
+function isOwner() {
+  return Boolean(myId) && photographerId != null &&
+    Number(myId) === Number(photographerId);
+}
+
+function updateOwnerBanner() {
+  document.getElementById("owner-banner").hidden = !isOwner();
+}
 
 function renderProfile(p) {
   document.title = `${p.studio_name || p.username} — Lumen`;
   const name = p.studio_name || p.username;
-  document.getElementById("p-avatar").textContent = (name || "?")
-    .charAt(0)
-    .toUpperCase();
+  const avatar = document.getElementById("p-avatar");
+  const initial = (name || "?").charAt(0).toUpperCase();
+  if (p.profile_picture) {
+    avatar.innerHTML = `<img class="avatar-img" src="${escapeHtml(
+      p.profile_picture
+    )}" alt="${escapeHtml(name)}">`;
+  } else {
+    avatar.textContent = initial;
+  }
   document.getElementById("p-studio").textContent = name;
 
   const joined = new Date(p.created_at).toLocaleDateString(undefined, {
@@ -41,8 +60,43 @@ function renderProfile(p) {
     p.city || "Location not set"
   } · Member since ${joined}`;
 
-  document.getElementById("p-bio").textContent =
-    p.bio || "This photographer has not added a bio yet.";
+  const hero = document.getElementById("profile-hero");
+  const coverBanner = document.getElementById("cover-banner");
+  if (p.cover_image) {
+    document.getElementById("cover-img").src = p.cover_image;
+    coverBanner.hidden = false;
+    hero.classList.add("has-cover");
+  } else {
+    coverBanner.hidden = true;
+    hero.classList.remove("has-cover");
+  }
+
+  const aboutBio = document.getElementById("about-bio");
+  const aboutStats = document.getElementById("about-stats");
+  const bio = (p.bio || "").trim();
+  aboutBio.textContent = bio;
+  const stats = [];
+  if (p.years_experience != null && p.years_experience !== "") {
+    stats.push(`${p.years_experience} years of experience`);
+  }
+  if (p.languages) {
+    stats.push(`Languages: ${p.languages}`);
+  }
+  const equipment = (p.equipment || "").trim();
+  aboutStats.innerHTML =
+    stats
+      .map((stat) => `<span class="chip">${escapeHtml(stat)}</span>`)
+      .join("") +
+    (equipment
+      ? `<p class="about-equipment"><strong>Equipment:</strong> ${escapeHtml(
+          equipment
+        )}</p>`
+      : "");
+  document.getElementById("about-section").hidden = !(
+    bio ||
+    stats.length > 0 ||
+    equipment
+  );
 
   document.getElementById("p-plan").hidden = p.plan !== "pro";
 
@@ -60,8 +114,43 @@ function renderProfile(p) {
   }
 
   photographerId = p.user_id;
+  updateOwnerBanner();
   statusEl.hidden = true;
   view.hidden = false;
+}
+
+function renderPackageCards() {
+  const section = document.getElementById("packages-section");
+  if (packageItems.length === 0) {
+    return;
+  }
+  const owner = isOwner();
+  const isPhotographer = myRole === "photographer";
+  document.getElementById("packages-grid").innerHTML = packageItems
+    .map((pkg) => {
+      let action = "";
+      if (owner) {
+        action = `<button class="btn btn-block pkg-book" type="button"
+          data-package-id="${pkg.id}"
+          data-title="${escapeHtml(pkg.title)}"
+          data-action="edit">Edit this package</button>`;
+      } else if (!isPhotographer) {
+        action = `<button class="btn btn-block pkg-book" type="button"
+          data-package-id="${pkg.id}"
+          data-title="${escapeHtml(pkg.title)}">Book session</button>`;
+      }
+      return `
+      <div class="package-card">
+        <h3>${escapeHtml(pkg.title)}</h3>
+        <p class="pkg-desc">${escapeHtml(
+          pkg.description || "Session details on request."
+        )}</p>
+        <div class="pkg-price">$${Number(pkg.price).toFixed(2)}</div>
+        ${action}
+      </div>`;
+    })
+    .join("");
+  section.hidden = false;
 }
 
 async function loadPackages() {
@@ -77,22 +166,8 @@ async function loadPackages() {
     if (items.length === 0) {
       return;
     }
-    document.getElementById("packages-grid").innerHTML = items
-      .map(
-        (pkg) => `
-      <div class="package-card">
-        <h3>${escapeHtml(pkg.title)}</h3>
-        <p class="pkg-desc">${escapeHtml(
-          pkg.description || "Session details on request."
-        )}</p>
-        <div class="pkg-price">$${Number(pkg.price).toFixed(2)}</div>
-        <button class="btn btn-block pkg-book" type="button"
-          data-package-id="${pkg.id}"
-          data-title="${escapeHtml(pkg.title)}">Book session</button>
-      </div>`
-      )
-      .join("");
-    document.getElementById("packages-section").hidden = false;
+    packageItems = items;
+    renderPackageCards();
   } catch (error) {
     console.error(error);
   }
@@ -100,33 +175,69 @@ async function loadPackages() {
 
 async function loadPortfolio() {
   try {
-    const response = await fetch(
-      `${API}/portfolio-photos/?profile=${encodeURIComponent(slug)}`
-    );
-    if (!response.ok) {
+    const [photosResponse, collectionsResponse] = await Promise.all([
+      fetch(`${API}/portfolio-photos/?profile=${encodeURIComponent(slug)}`),
+      fetch(
+        `${API}/portfolio-collections/?profile=${encodeURIComponent(slug)}`
+      ),
+    ]);
+    if (!photosResponse.ok) {
       return;
     }
-    const data = await response.json();
+    const data = await photosResponse.json();
     const items = Array.isArray(data) ? data : data.results || [];
     if (items.length === 0) {
       return;
     }
-    portfolioPhotos = items;
-    portfolioGrid.innerHTML = items
-      .map(
-        (photo, index) => `
+    let collections = [];
+    if (collectionsResponse.ok) {
+      const collectionsData = await collectionsResponse.json();
+      collections = Array.isArray(collectionsData)
+        ? collectionsData
+        : collectionsData.results || [];
+    }
+    const groups = collections
+      .map((collection) => ({
+        title: collection.title,
+        photos: items.filter((photo) => photo.collection === collection.id),
+      }))
+      .filter((group) => group.photos.length > 0);
+    const ungrouped = items.filter((photo) => !photo.collection);
+    if (ungrouped.length > 0) {
+      groups.unshift({ title: "Selected work", photos: ungrouped });
+    }
+    if (groups.length === 0) {
+      return;
+    }
+    const renderOrder = [];
+    portfolioGrid.innerHTML = groups
+      .map((group) => {
+        const figures = group.photos
+          .map((photo) => {
+            const index = renderOrder.push(photo) - 1;
+            return `
       <figure class="photo-card" data-index="${index}">
         <img src="${escapeHtml(photo.image)}" alt="${escapeHtml(
-          photo.caption || "Portfolio photo"
-        )}" loading="lazy" />
+              photo.caption || "Portfolio photo"
+            )}" loading="lazy" />
         ${
           photo.caption
-            ? `<figcaption>${escapeHtml(photo.caption)}</figcaption>`
+            ? `<figcaption class="photo-caption">${escapeHtml(
+                photo.caption
+              )}</figcaption>`
             : ""
         }
-      </figure>`
-      )
+      </figure>`;
+          })
+          .join("");
+        return `
+      <div class="collection-block">
+        <h3 class="collection-title">${escapeHtml(group.title)} <span class="collection-count">${group.photos.length}</span></h3>
+        <div class="portfolio-grid">${figures}</div>
+      </div>`;
+      })
       .join("");
+    portfolioPhotos = renderOrder;
     document.getElementById("portfolio-section").hidden = false;
   } catch (error) {
     console.error(error);
@@ -236,6 +347,10 @@ async function loadMe() {
   const me = await fetchMe();
   myRole = me ? me.role : null;
   myId = me ? me.id : null;
+  updateOwnerBanner();
+  if (packageItems.length > 0) {
+    renderPackageCards();
+  }
   updateReviewCta();
 }
 
@@ -310,7 +425,7 @@ function openBookModal(packageId, title) {
   bookForm.reset();
   const now = new Date();
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  bookDate.min = now.toISOString().slice(0, 16);
+  bookDate.min = now.toISOString().slice(0, 10);
   bookModal.hidden = false;
   bookDate.focus();
 }
@@ -333,7 +448,7 @@ async function handleBookSubmit(event) {
   }
   const packageId = Number(bookForm.dataset.packageId);
   if (!bookDate.value) {
-    bookError.textContent = "Please choose a date and time.";
+    bookError.textContent = "Please choose a date.";
     bookError.hidden = false;
     return;
   }
@@ -344,6 +459,9 @@ async function handleBookSubmit(event) {
         package: packageId,
         date: bookDate.value,
         message: bookMessage.value.trim(),
+        event_location: bookLocation.value.trim(),
+        event_time: bookTime.value || null,
+        event_notes: bookNotes.value.trim(),
       },
     });
     if (!response.ok) {
@@ -351,17 +469,10 @@ async function handleBookSubmit(event) {
       bookError.hidden = false;
       return;
     }
+    const booking = await response.json();
     closeBookModal();
-    const button = document.querySelector(
-      `.pkg-book[data-package-id="${bookForm.dataset.packageId}"]`
-    );
-    if (button) {
-      button.textContent = "Request sent ✓";
-      button.disabled = true;
-    }
-    showToast(
-      "Request sent! Track it in your dashboard under \u201cMy requests\u201d."
-    );
+    // Land straight on the request detail (details + chat) in the dashboard.
+    window.location.href = `dashboard.html?tab=requests&item=${booking.id}`;
   } catch (error) {
     console.error(error);
     bookError.textContent =
@@ -419,6 +530,10 @@ async function handleReviewSubmit(event) {
 document.getElementById("packages-grid").addEventListener("click", (event) => {
   const button = event.target.closest(".pkg-book");
   if (!button) {
+    return;
+  }
+  if (button.dataset.action === "edit") {
+    window.location.href = `dashboard.html?tab=packages&item=${button.dataset.packageId}`;
     return;
   }
   openBookModal(button.dataset.packageId, button.dataset.title);
