@@ -16,6 +16,11 @@ const bookLocation = document.getElementById("book-location");
 const bookTime = document.getElementById("book-time");
 const bookNotes = document.getElementById("book-notes");
 const bookError = document.getElementById("book-error");
+const bookPolicyName = document.getElementById("book-policy-name");
+const bookPolicyLink = document.getElementById("book-policy-link");
+const bookPolicyCheck = document.getElementById("book-policy-check");
+const bookSubmit = document.getElementById("book-submit");
+const policyModal = document.getElementById("policy-modal");
 const reviewModal = document.getElementById("review-modal");
 const reviewForm = document.getElementById("review-form");
 const reviewError = document.getElementById("review-error");
@@ -152,7 +157,7 @@ function renderPackageCards() {
         <p class="pkg-desc">${escapeHtml(
           pkg.description || "Session details on request."
         )}</p>
-        <div class="pkg-price">$${Number(pkg.price).toFixed(2)}</div>
+        <div class="pkg-price">${priceRangeLabel(pkg.price, pkg.price_max)}</div>
         ${action}
       </div>`;
     })
@@ -473,6 +478,10 @@ document.addEventListener("keydown", (event) => {
     closeReviewModal();
     return;
   }
+  if (event.key === "Escape" && !policyModal.hidden) {
+    closePolicyModal();
+    return;
+  }
   const reportModal = document.getElementById("report-modal");
   const replyModal = document.getElementById("reply-modal");
   if (event.key === "Escape" && reportModal && !reportModal.hidden) {
@@ -489,11 +498,36 @@ function openBookModal(packageId, title) {
   document.getElementById("book-package").textContent = title;
   bookError.hidden = true;
   bookForm.reset();
+  const pkg = packageItems.find(
+    (item) => Number(item.id) === Number(packageId)
+  );
+  const policy = (pkg && pkg.cancellation_policy) || "moderate";
+  bookForm.dataset.policy = policy;
+  bookForm.dataset.policySummary =
+    (pkg && pkg.cancellation_summary) || "";
+  bookPolicyName.textContent = cancellationPolicyLabel(policy);
+  bookSubmit.disabled = true;
   const now = new Date();
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   bookDate.min = now.toISOString().slice(0, 10);
   bookModal.hidden = false;
   bookDate.focus();
+}
+
+function openPolicyModal() {
+  const policy = bookForm.dataset.policy || "moderate";
+  document.getElementById("policy-title").textContent =
+    `${cancellationPolicyLabel(policy)} cancellation policy`;
+  const summary = bookForm.dataset.policySummary;
+  document.getElementById("policy-body").textContent =
+    (policy === "custom" && summary) ||
+    CANCELLATION_POLICY_TEXTS[policy] ||
+    CANCELLATION_POLICY_TEXTS.moderate;
+  policyModal.hidden = false;
+}
+
+function closePolicyModal() {
+  policyModal.hidden = true;
 }
 
 function closeBookModal() {
@@ -518,6 +552,12 @@ async function handleBookSubmit(event) {
     bookError.hidden = false;
     return;
   }
+  if (!bookPolicyCheck.checked) {
+    bookError.textContent =
+      "Please agree to the cancellation policy to continue.";
+    bookError.hidden = false;
+    return;
+  }
   try {
     const response = await apiFetch("/bookings/", {
       method: "POST",
@@ -528,6 +568,7 @@ async function handleBookSubmit(event) {
         event_location: bookLocation.value.trim(),
         event_time: bookTime.value || null,
         event_notes: bookNotes.value.trim(),
+        policy_accepted: true,
       },
     });
     if (!response.ok) {
@@ -780,6 +821,20 @@ bookModal.addEventListener("click", (event) => {
   }
 });
 bookForm.addEventListener("submit", handleBookSubmit);
+bookPolicyCheck.addEventListener("change", () => {
+  bookSubmit.disabled = !bookPolicyCheck.checked;
+});
+bookPolicyLink.addEventListener("click", (event) => {
+  event.preventDefault();
+  openPolicyModal();
+});
+document.getElementById("policy-close").addEventListener("click", closePolicyModal);
+document.getElementById("policy-ok").addEventListener("click", closePolicyModal);
+policyModal.addEventListener("click", (event) => {
+  if (event.target === policyModal) {
+    closePolicyModal();
+  }
+});
 
 document
   .getElementById("btn-write-review")

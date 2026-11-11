@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Package, PhotographerProfile, PortfolioCollection, PortfolioPhoto
+from bookings.policies import policy_summary
 
 
 class PhotographerProfileSerializer(serializers.ModelSerializer):
@@ -69,6 +70,7 @@ class PackageSerializer(serializers.ModelSerializer):
     studio_name = serializers.CharField(
         source="profile.studio_name", read_only=True
     )
+    cancellation_summary = serializers.SerializerMethodField()
 
     class Meta:
         model = Package
@@ -79,8 +81,32 @@ class PackageSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "price",
+            "price_max",
+            "cancellation_policy",
+            "cancellation_refund_percent",
+            "cancellation_refund_hours",
+            "cancellation_summary",
         ]
-        read_only_fields = ["id", "profile_slug", "studio_name"]
+        read_only_fields = [
+            "id",
+            "profile_slug",
+            "studio_name",
+            "cancellation_summary",
+        ]
+
+    def get_cancellation_summary(self, obj):
+        return policy_summary(obj)
+
+    def validate(self, attrs):
+        price = attrs.get("price", getattr(self.instance, "price", None))
+        price_max = attrs.get(
+            "price_max", getattr(self.instance, "price_max", None)
+        )
+        if price_max is not None and price is not None and price_max < price:
+            raise serializers.ValidationError(
+                {"price_max": "The maximum price cannot be below the minimum"}
+            )
+        return attrs
 
 
 class PortfolioPhotoSerializer(serializers.ModelSerializer):

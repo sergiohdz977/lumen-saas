@@ -1,20 +1,20 @@
-# Lumen
+﻿# Lumen
 
 A SaaS for photographers: marketplace, bookings, private galleries,
-reviews, real-time notifications and Stripe payments — with a free tier and a
+reviews, real-time notifications and Stripe payments â€” with a free tier and a
 Pro subscription for photographers. Django REST backend plus a vanilla
 HTML/CSS/JS web frontend served by the same server.
 
 **Status**: backend complete (roadmap phases 1-4) + complete web frontend
 (catalog, profile with reviews, booking flow, role dashboard, galleries,
-payments), **400 tests passing**.
+payments), **416 tests passing**.
 
 ## Features
 
 - Web frontend (no build step): registration with role picker, catalog with
   city/specialty search, profile page with packages/portfolio/lightbox/
   reviews, booking modal, private dashboard with notifications, requests
-  (accept/reject + deposit checkout), shoots (booked → editing → delivered),
+  (accept/reject + deposit checkout), shoots (booked â†’ editing â†’ delivered),
   catalog CRUD, studio settings, galleries with uploads and share links,
   favorites and payment history
 - JWT auth with two roles: `photographer` and `customer`
@@ -31,9 +31,9 @@ payments), **400 tests passing**.
 
 ## Tech stack
 
-Django 6.1 · Django REST Framework · SimpleJWT · Channels · Celery ·
-PostgreSQL (SQLite in development) · Redis/Memurai · Cloudinary · Stripe ·
-drf-spectacular · Pillow · WhiteNoise
+Django 6.1 Â· Django REST Framework Â· SimpleJWT Â· Channels Â· Celery Â·
+PostgreSQL (SQLite in development) Â· Redis/Memurai Â· Cloudinary Â· Stripe Â·
+drf-spectacular Â· Pillow Â· WhiteNoise
 
 ## Quick start
 
@@ -66,7 +66,7 @@ booking accept and gallery delivery send a message with a private share link.
 - **Interactive Swagger UI**: <http://127.0.0.1:8000/api/docs/>
 - **OpenAPI schema**: `GET /api/schema/` (committed copy in
   [docs/api-schema.yml](docs/api-schema.yml))
-- **Auth**: `POST /api/auth/login/` → `access` token → send it as
+- **Auth**: `POST /api/auth/login/` â†’ `access` token â†’ send it as
   `Authorization: Bearer <token>` on every request
 - List endpoints return `{count, next, previous, results}` (10 per page)
 
@@ -154,7 +154,7 @@ gallery created (to the customer), new review (to the photographer).
 ### Payments
 
 Stripe deposits for accepted bookings (20% of the package price, test keys
-first — put `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in `.env`).
+first â€” put `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in `.env`).
 **Stripe Connect destination charges**: the money goes straight from the
 customer to the photographer's Stripe account; an optional platform fee
 (`STRIPE_PLATFORM_FEE_PERCENTAGE`, default 0) stays with the app.
@@ -184,7 +184,7 @@ venv\Scripts\python.exe manage.py test
 ```
 
 Fully isolated: temporary media folder, eager Celery, in-memory channel layer,
-no network (no Redis, Cloudinary or Stripe needed). **400 tests** covering
+no network (no Redis, Cloudinary or Stripe needed). **416 tests** covering
 permissions, business rules, uploads, webhooks and plan limits.
 
 ## Database
@@ -224,7 +224,7 @@ second service.
 config/        settings, urls, ASGI (WebSockets), Celery app
 users/         custom User (roles), JWT auth
 clients/       customer records per photographer
-shoots/        shoot lifecycle (booked → editing → delivered)
+shoots/        shoot lifecycle (booked â†’ editing â†’ delivered)
 profiles/      photographer profile, packages, portfolio, seed_demo
 bookings/      booking requests and accept/reject flow
 galleries/     private galleries, photos, favorites, share links

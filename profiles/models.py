@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.text import slugify
 
@@ -66,6 +66,12 @@ class PhotographerProfile(models.Model):
 
 
 class Package(models.Model):
+    class CancellationPolicy(models.TextChoices):
+        FLEXIBLE = "flexible", "Flexible"
+        MODERATE = "moderate", "Moderate"
+        STRICT = "strict", "Strict"
+        CUSTOM = "custom", "Custom"
+
     profile = models.ForeignKey(
         PhotographerProfile,
         on_delete=models.CASCADE,
@@ -73,11 +79,32 @@ class Package(models.Model):
     )
     title = models.CharField(max_length=150)
     description = models.TextField(blank=True)
+    # Starting price. ``price_max`` turns the package into a range.
     price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         validators=[MinValueValidator(0)],
     )
+    price_max = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
+    cancellation_policy = models.CharField(
+        max_length=20,
+        choices=CancellationPolicy.choices,
+        default=CancellationPolicy.MODERATE,
+    )
+    # Only used when cancellation_policy is CUSTOM: a client cancelling at
+    # least ``cancellation_refund_hours`` before the shoot gets back
+    # ``cancellation_refund_percent`` of the deposit.
+    cancellation_refund_percent = models.PositiveSmallIntegerField(
+        default=100,
+        validators=[MaxValueValidator(100)],
+    )
+    cancellation_refund_hours = models.PositiveIntegerField(default=48)
 
     class Meta:
         ordering = ["id"]

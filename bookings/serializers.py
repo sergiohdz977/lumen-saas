@@ -2,6 +2,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from payments.models import Payment
 from .models import BookingRequest, Message
+from .policies import client_refund_cents, policy_summary, refund_fraction
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -47,6 +48,10 @@ class BookingRequestSerializer(serializers.ModelSerializer):
     profile_studio_name = serializers.CharField(
         source="package.profile.studio_name", read_only=True, allow_blank=True
     )
+    cancellation_policy = serializers.CharField(
+        source="package.cancellation_policy", read_only=True
+    )
+    cancellation_policy_summary = serializers.SerializerMethodField()
     effective_price = serializers.DecimalField(
         max_digits=10, decimal_places=2, read_only=True
     )
@@ -54,6 +59,7 @@ class BookingRequestSerializer(serializers.ModelSerializer):
     days_until_event = serializers.SerializerMethodField()
     refundable = serializers.SerializerMethodField()
     deposit_cents = serializers.SerializerMethodField()
+    expected_refund_cents = serializers.SerializerMethodField()
 
     class Meta:
         model = BookingRequest
@@ -64,6 +70,8 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "package_title",
             "profile_slug",
             "profile_studio_name",
+            "cancellation_policy",
+            "cancellation_policy_summary",
             "date",
             "event_location",
             "event_time",
@@ -72,11 +80,14 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "final_price",
             "effective_price",
             "status",
+            "policy_accepted",
+            "payment_status",
             "deposit_deadline",
             "shoot",
             "days_until_event",
             "refundable",
             "deposit_cents",
+            "expected_refund_cents",
             "created_at",
         ]
         read_only_fields = [
@@ -85,14 +96,18 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "package_title",
             "profile_slug",
             "profile_studio_name",
+            "cancellation_policy",
+            "cancellation_policy_summary",
             "final_price",
             "effective_price",
             "status",
+            "payment_status",
             "deposit_deadline",
             "shoot",
             "days_until_event",
             "refundable",
             "deposit_cents",
+            "expected_refund_cents",
             "created_at",
         ]
 
@@ -103,9 +118,12 @@ class BookingRequestSerializer(serializers.ModelSerializer):
     def get_days_until_event(self, obj):
         return (obj.date.date() - timezone.now().date()).days
 
+    def get_cancellation_policy_summary(self, obj):
+        return policy_summary(obj.package)
+
     def get_refundable(self, obj):
-        """Cancellation policy: deposits are refundable until 7 days out."""
-        return self.get_days_until_event(obj) > 7
+        """Policy window: would a client cancellation refund anything now?"""
+        return refund_fraction(obj) > 0
 
     def get_deposit_cents(self, obj):
         """Amount already collected as a deposit (None when unpaid)."""
@@ -117,6 +135,25 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             .first()
         )
         return deposit.amount_cents if deposit else None
+
+    def get_expected_refund_cents(self, obj):
+        """Deposit portion a client cancellation would refund right now."""
+        deposit = self.get_deposit_cents(obj)
+        return client_refund_cents(obj, deposit or 0)
+
+    def validate(self, attrs):
+        if self.instance is None and not attrs.get(
+            "policy_accepted", False
+        ):
+            raise serializers.ValidationError(
+                {
+                    "policy_accepted": (
+                        "You must accept the photographer's "
+                        "cancellation policy"
+                    )
+                }
+            )
+        return attrs
 
     def validate_package(self, value):
         if not value.profile.is_published:

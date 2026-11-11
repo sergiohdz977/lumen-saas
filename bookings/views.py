@@ -20,6 +20,7 @@ from users.models import User
 from users.permissions import IsCustomer, IsPhotographer
 
 from .models import BookingRequest, Message
+from .policies import client_refund_cents, policy_name
 from .serializers import BookingRequestSerializer, MessageSerializer
 from .tasks import booking_accepted_email, enforce_deposit_deadline
 
@@ -87,6 +88,7 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
             "offer",
             "pay_cash",
             "complete",
+            "refund",
         ):
             return [IsAuthenticated(), IsPhotographer()]
         return [IsAuthenticated()]
@@ -177,8 +179,8 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
                 "The photographer accepted your request. Pay the deposit "
                 "to confirm the booking."
                 if price is None
-                else f"Custom offer sent: the final price is now "
-                f"${price:.2f}. Pay the deposit to confirm the booking."
+                else f"Offer sent: ${price:.2f}. The client will pay the "
+                f"deposit to confirm."
             ),
         )
         if price is None:
@@ -321,41 +323,60 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
     def cancel(self, request, pk=None):
         """Either party cancels the booking.
 
-        The photographer cancelling always refunds the deposit in full;
-        the client follows the 7-day policy (>7 days out: refundable,
-        7 or fewer: retained). The freed date is guaranteed by deleting
-        the shoot when it has no gallery, and by the CANCELLED exclusion
-        in ensure_shoot_and_client when the gallery must survive.
+        Client cancellations follow the package policy: Flexible refunds
+        the deposit in full until 48 hours before the shoot, Moderate
+        refunds 50% until 7 days before, Strict never refunds. A
+        photographer cancellation always ends in a full refund (pending
+        until the photographer issues it with ``refund``). The freed date
+        is guaranteed by deleting the shoot when it has no gallery, and by
+        the CANCELLED exclusion in ensure_shoot_and_client when the
+        gallery must survive.
         """
         booking = self.get_object()
         if booking.status not in self.CANCELABLE_STATUSES:
             raise ValidationError("Only active bookings can be cancelled")
         by_photographer = request.user == booking.package.profile.user
-        days_left = (booking.date.date() - timezone.now().date()).days
-        should_refund = by_photographer or days_left > 7
-        had_deposit = booking.payments.filter(
-            kind=Payment.Kind.DEPOSIT, status=Payment.Status.PAID
-        ).exists()
+        deposits = list(
+            booking.payments.filter(
+                kind=Payment.Kind.DEPOSIT, status=Payment.Status.PAID
+            )
+        )
+        deposit_cents = sum(item.amount_cents for item in deposits)
         refunded_cents = 0
         with transaction.atomic():
             booking.status = BookingRequest.Status.CANCELLED
-            booking.save(update_fields=["status"])
-            if should_refund:
-                for deposit in booking.payments.filter(
-                    kind=Payment.Kind.DEPOSIT,
-                    status=Payment.Status.PAID,
-                ):
+            if by_photographer:
+                booking.payment_status = (
+                    BookingRequest.PaymentStatus.REFUND_PENDING
+                    if deposit_cents
+                    else BookingRequest.PaymentStatus.NONE
+                )
+            elif deposit_cents:
+                refunded_cents = client_refund_cents(
+                    booking, deposit_cents
+                )
+                booking.payment_status = (
+                    BookingRequest.PaymentStatus.REFUNDED
+                    if refunded_cents > 0
+                    else BookingRequest.PaymentStatus.RETAINED
+                )
+                if refunded_cents > 0:
+                    first = deposits[0]
                     Payment.objects.create(
                         booking=booking,
                         kind=Payment.Kind.DEPOSIT,
-                        customer=deposit.customer,
-                        photographer=deposit.photographer,
-                        amount_cents=deposit.amount_cents,
+                        customer=first.customer,
+                        photographer=first.photographer,
+                        amount_cents=refunded_cents,
                         status=Payment.Status.REFUNDED,
-                        stripe_session_id=f"refund_{uuid4().hex[:32]}",
+                        stripe_session_id=(
+                            f"refund_{uuid4().hex[:32]}"
+                        ),
                         paid_at=timezone.now(),
                     )
-                    refunded_cents += deposit.amount_cents
+            else:
+                booking.payment_status = BookingRequest.PaymentStatus.NONE
+            booking.save(update_fields=["status", "payment_status"])
             shoot = getattr(booking, "shoot", None)
             if shoot is not None:
                 try:
@@ -366,34 +387,55 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
                 # With a gallery the shoot must stay (CASCADE would take
                 # the gallery with it); the date is freed by the CANCELLED
                 # exclusion in the conflict check instead.
+        if by_photographer:
+            message_text = (
+                "System: Booking cancelled by photographer. "
+                "Full refund will be processed."
+            )
+        elif refunded_cents and refunded_cents >= deposit_cents:
+            message_text = (
+                "System: Booking cancelled by client. "
+                "Full deposit refunded."
+            )
+        elif refunded_cents:
+            percent = int(round(refunded_cents * 100 / deposit_cents))
+            message_text = (
+                f"System: Booking cancelled by client. {percent}% of the "
+                "deposit refunded."
+            )
+        elif deposit_cents:
+            message_text = (
+                "System: Booking cancelled by client. "
+                "Policy applied: Deposit retained."
+            )
+        else:
+            message_text = "System: Booking cancelled by client."
         Message.objects.create(
-            booking=booking,
-            sender=None,
-            text=(
-                "System: The photographer has cancelled this booking. "
-                "The deposit will be refunded."
-                if by_photographer
-                else "System: The client has cancelled this booking."
-            ),
+            booking=booking, sender=None, text=message_text
         )
         if by_photographer:
-            refund_note = (
-                "The deposit will be refunded."
-                if refunded_cents
-                else "No deposit had been collected."
-            )
             notify(
                 booking.customer,
                 "Booking cancelled",
-                f'The photographer cancelled "{booking.package.title}". '
-                f"{refund_note}",
+                (
+                    f'The photographer cancelled "{booking.package.title}". '
+                    "A full refund will be processed."
+                ),
                 link=_booking_link(booking),
             )
         else:
-            if refunded_cents:
+            if refunded_cents >= deposit_cents and deposit_cents:
                 refund_note = "The deposit was refunded."
-            elif had_deposit:
-                refund_note = "The deposit was retained per the 7-day policy."
+            elif refunded_cents:
+                refund_note = (
+                    f"${refunded_cents / 100:.2f} was refunded and the "
+                    f"{policy_name(booking)} policy applied."
+                )
+            elif deposit_cents:
+                refund_note = (
+                    f"The deposit was retained ({policy_name(booking)} "
+                    "policy)."
+                )
             else:
                 refund_note = ""
             notify(
@@ -404,6 +446,50 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
                 + (f" {refund_note}" if refund_note else ""),
                 link=_booking_link(booking),
             )
+        return Response(self.get_serializer(booking).data)
+
+    @action(detail=True, methods=["post"])
+    def refund(self, request, pk=None):
+        """Photographer issues the refund pending after a cancellation."""
+        booking = self.get_object()
+        if booking.status != BookingRequest.Status.CANCELLED:
+            raise ValidationError("Only cancelled bookings can be refunded")
+        if (
+            booking.payment_status
+            != BookingRequest.PaymentStatus.REFUND_PENDING
+        ):
+            raise ValidationError("This booking has no pending refund")
+        with transaction.atomic():
+            deposits = list(
+                booking.payments.filter(
+                    kind=Payment.Kind.DEPOSIT,
+                    status=Payment.Status.PAID,
+                )
+            )
+            total_cents = sum(item.amount_cents for item in deposits)
+            if deposits and total_cents:
+                first = deposits[0]
+                Payment.objects.create(
+                    booking=booking,
+                    kind=Payment.Kind.DEPOSIT,
+                    customer=first.customer,
+                    photographer=first.photographer,
+                    amount_cents=total_cents,
+                    status=Payment.Status.REFUNDED,
+                    stripe_session_id=f"refund_{uuid4().hex[:32]}",
+                    paid_at=timezone.now(),
+                )
+            booking.payment_status = BookingRequest.PaymentStatus.REFUNDED
+            booking.save(update_fields=["payment_status"])
+        notify(
+            booking.customer,
+            "Deposit refunded",
+            (
+                f'Your deposit for "{booking.package.title}" was refunded '
+                "in full."
+            ),
+            link=_booking_link(booking),
+        )
         return Response(self.get_serializer(booking).data)
 
     # -------------------------------- chat ---------------------------------

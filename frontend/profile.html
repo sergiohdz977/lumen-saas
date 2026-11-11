@@ -10,7 +10,7 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="css/styles.css?v=59" />
+  <link rel="stylesheet" href="css/styles.css?v=60" />
 </head>
 <body>
   <header class="site-header">
@@ -118,6 +118,7 @@
       <button id="book-close" class="modal-close" type="button" aria-label="Close">&times;</button>
       <h2>Book a session</h2>
       <p class="modal-sub" id="book-package"></p>
+      <p class="policy-hint"><strong>Important:</strong> your deposit refund depends on the photographer's cancellation policy below.</p>
       <form id="book-form">
         <label for="book-date">Date</label>
         <input id="book-date" type="date" required />
@@ -138,9 +139,28 @@
         ></textarea>
         <label for="book-message">Message (optional)</label>
         <textarea id="book-message" rows="3" placeholder="Tell the photographer what you have in mind…"></textarea>
+        <p class="policy-line">
+          Cancellation policy: <strong id="book-policy-name">Moderate</strong>
+          · <a href="#" id="book-policy-link">View full policy</a>
+        </p>
+        <label class="check-line">
+          <input id="book-policy-check" type="checkbox" />
+          <span>I agree to the photographer's cancellation policy.</span>
+        </label>
         <p id="book-error" class="form-error" hidden></p>
-        <button class="btn btn-block" type="submit">Send request</button>
+        <button class="btn btn-block" id="book-submit" type="submit">Send request</button>
       </form>
+    </div>
+  </div>
+
+  <div id="policy-modal" class="modal" hidden>
+    <div class="modal-panel">
+      <button id="policy-close" class="modal-close" type="button" aria-label="Close">&times;</button>
+      <h2 id="policy-title">Cancellation policy</h2>
+      <p class="policy-hint"><strong>Important:</strong> this policy decides how much of your deposit is refunded if you cancel.</p>
+      <p class="modal-sub" id="policy-body"></p>
+      <p class="meta">The deposit is 20% of the agreed price and is charged when the booking is confirmed.</p>
+      <button class="btn btn-block" id="policy-ok" type="button">Got it</button>
     </div>
   </div>
 
@@ -177,7 +197,7 @@
     </div>
   </div>
 
-  <script src="js/common.js?v=59"></script>
-  <script src="js/profile.js?v=59"></script>
+  <script src="js/common.js?v=60"></script>
+  <script src="js/profile.js?v=60"></script>
 </body>
 </html>

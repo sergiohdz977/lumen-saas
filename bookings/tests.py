@@ -84,6 +84,7 @@ class BookingEndpointsTests(TestCase):
             "package": self.package.pk,
             "date": "2026-12-15T15:00:00Z",
             "message": "I want to book",
+            "policy_accepted": True,
         }
 
     def test_anonymous_create_is_denied(self):
@@ -129,6 +130,30 @@ class BookingEndpointsTests(TestCase):
         response = self.api.post("/api/bookings/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("date", response.data)
+
+    def test_policy_must_be_accepted(self):
+        self.api.force_authenticate(self.customer)
+        payload = {
+            "package": self.package.pk,
+            "date": "2026-12-15T15:00:00Z",
+        }
+        response = self.api.post("/api/bookings/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("policy_accepted", response.data)
+        self.assertEqual(BookingRequest.objects.count(), 2)
+
+    def test_policy_accepted_is_saved(self):
+        self.api.force_authenticate(self.customer)
+        response = self.api.post(
+            "/api/bookings/", self.valid_payload, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data["policy_accepted"])
+        self.assertEqual(response.data["cancellation_policy"], "moderate")
+        booking = BookingRequest.objects.get(
+            package=self.package, message="I want to book"
+        )
+        self.assertTrue(booking.policy_accepted)
 
     def test_customer_lists_only_own_bookings(self):
         self.api.force_authenticate(self.customer)
@@ -469,6 +494,7 @@ class MarketplaceJourneyTests(TestCase):
                 "package": package_id,
                 "date": "2026-11-20T15:00:00Z",
                 "message": "I want to book",
+                "policy_accepted": True,
             },
             format="json",
         )
@@ -527,6 +553,7 @@ class MarketplaceJourneyTests(TestCase):
                 "package": package.pk,
                 "date": "2026-11-20T10:00:00Z",
                 "message": "primera",
+                "policy_accepted": True,
             },
             format="json",
         )
@@ -547,6 +574,7 @@ class MarketplaceJourneyTests(TestCase):
                 "package": package.pk,
                 "date": "2026-11-25T10:00:00Z",
                 "message": "segunda",
+                "policy_accepted": True,
             },
             format="json",
         )
@@ -714,6 +742,7 @@ class BookingNotificationTests(TestCase):
                 "package": self.package.pk,
                 "date": "2026-12-15T15:00:00Z",
                 "message": "I want to book",
+                "policy_accepted": True,
             },
             format="json",
         )
@@ -874,7 +903,32 @@ class CancellationTests(TestCase):
     def setUp(self):
         self.api = APIClient()
 
-    def _booking(self, days=30, status=BookingRequest.Status.ACCEPTED):
+    def _booking(
+        self,
+        days=30,
+        status=BookingRequest.Status.ACCEPTED,
+        policy=Package.CancellationPolicy.MODERATE,
+        percent=None,
+        hours=None,
+    ):
+        fields = []
+        if self.package.cancellation_policy != policy:
+            self.package.cancellation_policy = policy
+            fields.append("cancellation_policy")
+        if (
+            percent is not None
+            and self.package.cancellation_refund_percent != percent
+        ):
+            self.package.cancellation_refund_percent = percent
+            fields.append("cancellation_refund_percent")
+        if (
+            hours is not None
+            and self.package.cancellation_refund_hours != hours
+        ):
+            self.package.cancellation_refund_hours = hours
+            fields.append("cancellation_refund_hours")
+        if fields:
+            self.package.save(update_fields=fields)
         return BookingRequest.objects.create(
             customer=self.maria,
             package=self.package,
@@ -914,7 +968,7 @@ class CancellationTests(TestCase):
             f"/api/bookings/{booking.pk}/cancel/", format="json"
         )
 
-    def test_client_cancel_beyond_7_days_refunds_and_frees_date(self):
+    def test_client_cancel_moderate_beyond_7_days_refunds_half(self):
         booking = self._booking(days=30)
         shoot = self._with_shoot(booking)
         self._with_deposit(booking)
@@ -922,14 +976,18 @@ class CancellationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         booking.refresh_from_db()
         self.assertEqual(booking.status, BookingRequest.Status.CANCELLED)
+        self.assertEqual(
+            booking.payment_status, BookingRequest.PaymentStatus.REFUNDED
+        )
         self.assertTrue(response.data["refundable"])
         self.assertEqual(response.data["days_until_event"], 30)
         self.assertEqual(response.data["deposit_cents"], 4000)
+        self.assertEqual(response.data["expected_refund_cents"], 2000)
         # Date freed: the shoot had no gallery, so it was dropped.
         self.assertFalse(Shoot.objects.filter(pk=shoot.pk).exists())
         refunds = booking.payments.filter(status=Payment.Status.REFUNDED)
         self.assertEqual(refunds.count(), 1)
-        self.assertEqual(refunds.first().amount_cents, 4000)
+        self.assertEqual(refunds.first().amount_cents, 2000)
         # The original paid deposit stays for the audit trail.
         self.assertEqual(
             booking.payments.filter(status=Payment.Status.PAID).count(), 1
@@ -937,26 +995,110 @@ class CancellationTests(TestCase):
         system = booking.messages.filter(sender=None)
         self.assertEqual(
             system.last().text,
-            "System: The client has cancelled this booking.",
+            "System: Booking cancelled by client. "
+            "50% of the deposit refunded.",
         )
 
-    def test_client_cancel_within_7_days_retains_deposit(self):
+    def test_client_cancel_moderate_within_7_days_retains_deposit(self):
         booking = self._booking(days=3)
         self._with_shoot(booking)
         self._with_deposit(booking)
         response = self._cancel(self.maria, booking)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data["refundable"])
+        self.assertEqual(response.data["expected_refund_cents"], 0)
         booking.refresh_from_db()
         self.assertEqual(booking.status, BookingRequest.Status.CANCELLED)
+        self.assertEqual(
+            booking.payment_status, BookingRequest.PaymentStatus.RETAINED
+        )
         self.assertEqual(
             booking.payments.filter(status=Payment.Status.REFUNDED).count(), 0
         )
         self.assertEqual(
             booking.payments.filter(status=Payment.Status.PAID).count(), 1
         )
+        system = booking.messages.filter(sender=None)
+        self.assertEqual(
+            system.last().text,
+            "System: Booking cancelled by client. "
+            "Policy applied: Deposit retained.",
+        )
 
-    def test_photographer_cancel_refunds_even_within_7_days(self):
+    def test_client_cancel_flexible_beyond_48h_refunds_in_full(self):
+        booking = self._booking(
+            days=3, policy=Package.CancellationPolicy.FLEXIBLE
+        )
+        self._with_shoot(booking)
+        self._with_deposit(booking)
+        response = self._cancel(self.maria, booking)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["refundable"])
+        self.assertEqual(response.data["expected_refund_cents"], 4000)
+        booking.refresh_from_db()
+        self.assertEqual(
+            booking.payment_status, BookingRequest.PaymentStatus.REFUNDED
+        )
+        refunds = booking.payments.filter(status=Payment.Status.REFUNDED)
+        self.assertEqual(refunds.count(), 1)
+        self.assertEqual(refunds.first().amount_cents, 4000)
+        system = booking.messages.filter(sender=None)
+        self.assertEqual(
+            system.last().text,
+            "System: Booking cancelled by client. Full deposit refunded.",
+        )
+
+    def test_client_cancel_flexible_within_48h_retains_deposit(self):
+        booking = self._booking(
+            days=1, policy=Package.CancellationPolicy.FLEXIBLE
+        )
+        self._with_shoot(booking)
+        self._with_deposit(booking)
+        response = self._cancel(self.maria, booking)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["refundable"])
+        booking.refresh_from_db()
+        self.assertEqual(
+            booking.payment_status, BookingRequest.PaymentStatus.RETAINED
+        )
+        self.assertEqual(
+            booking.payments.filter(status=Payment.Status.REFUNDED).count(), 0
+        )
+
+    def test_client_cancel_strict_always_retains_deposit(self):
+        booking = self._booking(
+            days=30, policy=Package.CancellationPolicy.STRICT
+        )
+        self._with_shoot(booking)
+        self._with_deposit(booking)
+        response = self._cancel(self.maria, booking)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["refundable"])
+        self.assertEqual(response.data["expected_refund_cents"], 0)
+        booking.refresh_from_db()
+        self.assertEqual(
+            booking.payment_status, BookingRequest.PaymentStatus.RETAINED
+        )
+        self.assertEqual(
+            booking.payments.filter(status=Payment.Status.REFUNDED).count(), 0
+        )
+
+    def test_client_cancel_without_deposit_keeps_neutral_status(self):
+        booking = self._booking(days=30)
+        self._with_shoot(booking)
+        response = self._cancel(self.maria, booking)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        booking.refresh_from_db()
+        self.assertEqual(
+            booking.payment_status, BookingRequest.PaymentStatus.NONE
+        )
+        system = booking.messages.filter(sender=None)
+        self.assertEqual(
+            system.last().text,
+            "System: Booking cancelled by client.",
+        )
+
+    def test_photographer_cancel_marks_refund_pending(self):
         booking = self._booking(days=2)
         shoot = self._with_shoot(booking)
         self._with_deposit(booking)
@@ -965,15 +1107,59 @@ class CancellationTests(TestCase):
         booking.refresh_from_db()
         self.assertEqual(booking.status, BookingRequest.Status.CANCELLED)
         self.assertEqual(
-            booking.payments.filter(status=Payment.Status.REFUNDED).count(), 1
+            booking.payment_status,
+            BookingRequest.PaymentStatus.REFUND_PENDING,
+        )
+        # Nothing is refunded automatically: the photographer issues it.
+        self.assertEqual(
+            booking.payments.filter(status=Payment.Status.REFUNDED).count(), 0
         )
         self.assertFalse(Shoot.objects.filter(pk=shoot.pk).exists())
         system = booking.messages.filter(sender=None)
         self.assertEqual(
             system.last().text,
-            "System: The photographer has cancelled this booking. "
-            "The deposit will be refunded.",
+            "System: Booking cancelled by photographer. "
+            "Full refund will be processed.",
         )
+
+    def test_photographer_issues_pending_refund(self):
+        booking = self._booking(days=2)
+        self._with_shoot(booking)
+        self._with_deposit(booking)
+        self._cancel(self.ana, booking)
+        response = self.api.post(
+            f"/api/bookings/{booking.pk}/refund/", format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        booking.refresh_from_db()
+        self.assertEqual(
+            booking.payment_status, BookingRequest.PaymentStatus.REFUNDED
+        )
+        refunds = booking.payments.filter(status=Payment.Status.REFUNDED)
+        self.assertEqual(refunds.count(), 1)
+        self.assertEqual(refunds.first().amount_cents, 4000)
+
+    def test_refund_happens_only_once(self):
+        booking = self._booking(days=2)
+        self._with_shoot(booking)
+        self._with_deposit(booking)
+        self._cancel(self.ana, booking)
+        self.api.post(f"/api/bookings/{booking.pk}/refund/", format="json")
+        response = self.api.post(
+            f"/api/bookings/{booking.pk}/refund/", format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_client_cannot_issue_a_refund(self):
+        booking = self._booking(days=2)
+        self._with_shoot(booking)
+        self._with_deposit(booking)
+        self._cancel(self.ana, booking)
+        self.api.force_authenticate(self.maria)
+        response = self.api.post(
+            f"/api/bookings/{booking.pk}/refund/", format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_cancel_completed_booking_is_rejected(self):
         booking = self._booking(
@@ -1028,3 +1214,70 @@ class CancellationTests(TestCase):
             second.status, BookingRequest.Status.AWAITING_PAYMENT
         )
         self.assertIsNotNone(getattr(second, "shoot", None))
+
+    def test_client_cancel_custom_policy_refunds_percentage(self):
+        booking = self._booking(
+            days=30,
+            policy=Package.CancellationPolicy.CUSTOM,
+            percent=30,
+            hours=24,
+        )
+        self._with_shoot(booking)
+        self._with_deposit(booking)
+        response = self._cancel(self.maria, booking)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, BookingRequest.Status.CANCELLED)
+        self.assertEqual(
+            booking.payment_status, BookingRequest.PaymentStatus.REFUNDED
+        )
+        self.assertTrue(response.data["refundable"])
+        self.assertEqual(response.data["expected_refund_cents"], 1200)
+        self.assertEqual(response.data["cancellation_policy"], "custom")
+        refunds = booking.payments.filter(status=Payment.Status.REFUNDED)
+        self.assertEqual(refunds.count(), 1)
+        self.assertEqual(refunds.first().amount_cents, 1200)
+        system = booking.messages.filter(sender=None)
+        self.assertEqual(
+            system.last().text,
+            "System: Booking cancelled by client. "
+            "30% of the deposit refunded.",
+        )
+
+    def test_client_cancel_custom_policy_inside_window_retains(self):
+        booking = self._booking(
+            days=1,
+            policy=Package.CancellationPolicy.CUSTOM,
+            percent=30,
+            hours=24,
+        )
+        self._with_shoot(booking)
+        self._with_deposit(booking)
+        response = self._cancel(self.maria, booking)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        booking.refresh_from_db()
+        self.assertEqual(
+            booking.payment_status, BookingRequest.PaymentStatus.RETAINED
+        )
+        self.assertFalse(response.data["refundable"])
+        self.assertEqual(response.data["expected_refund_cents"], 0)
+        self.assertEqual(
+            booking.payments.filter(status=Payment.Status.REFUNDED).count(),
+            0,
+        )
+
+    def test_booking_exposes_custom_policy_summary(self):
+        booking = self._booking(
+            days=30,
+            policy=Package.CancellationPolicy.CUSTOM,
+            percent=30,
+            hours=24,
+        )
+        self.api.force_authenticate(self.maria)
+        response = self.api.get(f"/api/bookings/{booking.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["cancellation_policy_summary"],
+            "30% refund if cancelled at least 24 hours before the shoot; "
+            "the deposit is retained after that.",
+        )

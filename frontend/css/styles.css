@@ -1071,6 +1071,10 @@ nav a:hover {
   border-color: rgba(203, 137, 24, 0.45);
 }
 
+.notice-danger {
+  border-color: rgba(229, 72, 77, 0.55);
+}
+
 .notice-icon {
   flex: 0 0 auto;
   width: 34px;
@@ -1091,6 +1095,11 @@ nav a:hover {
 .notice-warning .notice-icon {
   background: #f6e7c1;
   color: #8a6d1a;
+}
+
+.notice-danger .notice-icon {
+  background: #f8d7d8;
+  color: #b02a2f;
 }
 
 .notice-body {
@@ -2157,6 +2166,53 @@ a.bell-item {
   border: 1px dashed var(--hover-line);
   border-radius: 10px;
   font-size: 0.9rem;
+}
+
+.policy-banner {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  background: rgba(95, 141, 78, 0.1);
+  border: 1px solid rgba(95, 141, 78, 0.35);
+  border-radius: 10px;
+  font-size: 0.88rem;
+}
+
+.chat-closed {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px dashed var(--hover-line);
+  border-radius: 10px;
+  font-size: 0.88rem;
+}
+
+.policy-line {
+  margin: 4px 0 12px;
+  font-size: 0.85rem;
+}
+
+.policy-hint {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: rgba(194, 100, 58, 0.08);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+}
+
+.check-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.check-line input {
+  margin-top: 2px;
 }
 
 .detail-grid {

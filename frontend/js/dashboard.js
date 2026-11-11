@@ -1367,6 +1367,15 @@ function renderRequestDetail(booking) {
         booking.profile_studio_name || booking.profile_slug || ""
       )}`;
   const price = Number(booking.effective_price || 0);
+  const policyLabel = cancellationPolicyLabel(booking.cancellation_policy);
+  const policyBanner =
+    isPhotographer && booking.policy_accepted
+      ? `<p class="policy-banner">Client agreed to the ${policyLabel} policy${
+          booking.cancellation_policy_summary
+            ? ` — ${booking.cancellation_policy_summary}`
+            : "."
+        }</p>`
+      : "";
   const rows = [
     ["Date", formatDate(booking.date)],
     booking.event_time ? ["Event time", String(booking.event_time)] : null,
@@ -1410,6 +1419,13 @@ function renderRequestDetail(booking) {
   } else if (booking.status === "requested") {
     actions = cancelBtn;
   }
+  if (
+    booking.status === "cancelled" &&
+    isPhotographer &&
+    booking.payment_status === "refund_pending"
+  ) {
+    actions = `<button class="btn btn-sm btn-danger" type="button" data-detail-refund="${booking.id}" data-tip="Return the client's deposit in full. The refund is recorded immediately.">Refund Deposit</button>`;
+  }
   let reviewBlock = "";
   if (
     isPhotographer &&
@@ -1449,6 +1465,7 @@ function renderRequestDetail(booking) {
       </div>
     </div>
     ${detailNote(booking, isPhotographer)}
+    ${policyBanner}
     <div class="detail-grid">
       ${rows
         .map(
@@ -1470,10 +1487,14 @@ function renderRequestDetail(booking) {
     ${reviewBlock}
     <div class="chat-box">
       <div class="chat-list" id="chat-list"><p class="meta">Loading messages…</p></div>
-      <form class="chat-form" id="chat-form">
+      ${
+        booking.status === "cancelled"
+          ? '<div class="chat-closed">This conversation is closed because the booking was cancelled.</div>'
+          : `<form class="chat-form" id="chat-form">
         <input id="chat-input" type="text" maxlength="500" placeholder="Write a message…" autocomplete="off" aria-label="Message" />
         <button class="btn btn-sm" type="submit">Send</button>
-      </form>
+      </form>`
+      }
     </div>`;
   if (switching) {
     body.scrollTop = 0;
@@ -1502,6 +1523,12 @@ function renderRequestDetail(booking) {
   const cancelButton = actionsBox.querySelector("[data-detail-cancel]");
   if (cancelButton) {
     cancelButton.addEventListener("click", () => openCancelModal(booking));
+  }
+  const refundButton = actionsBox.querySelector("[data-detail-refund]");
+  if (refundButton) {
+    refundButton.addEventListener("click", () =>
+      confirmRefundDeposit(booking.id)
+    );
   }
   actionsBox.querySelectorAll("[data-pay]").forEach((button) => {
     button.addEventListener("click", () =>
@@ -1720,6 +1747,27 @@ function renderRequests(data, role) {
   lastRequestsData = data;
   lastRequestsRole = role;
   bookingsForOverview = data.results || [];
+  if (role === "customer") {
+    // A photographer cancellation leaves a pending refund: tell the client
+    // once per booking, no matter how many times the list refreshes.
+    const cancelledByStudio = bookingsForOverview.find(
+      (item) =>
+        item.status === "cancelled" &&
+        item.payment_status === "refund_pending" &&
+        !sessionStorage.getItem(`lumen_refund_notice_${item.id}`)
+    );
+    if (cancelledByStudio) {
+      sessionStorage.setItem(
+        `lumen_refund_notice_${cancelledByStudio.id}`,
+        "1"
+      );
+      showNotice({
+        title: "Booking cancelled",
+        text: "The photographer has cancelled. A full refund will be processed.",
+        tone: "warning",
+      });
+    }
+  }
   renderOverview();
   updateStripeAlert();
   renderPaymentsSummary();
@@ -1906,48 +1954,68 @@ async function confirmReject(id) {
   }
 }
 
-/* Smart cancellation modal: the photographer always refunds in full;
-   the client follows the 7-day policy (>7 days: refundable, 7 or fewer:
-   the deposit is lost). Without a paid deposit there is no money at
-   risk, so the message stays generic. */
+async function confirmRefundDeposit(id) {
+  const confirmed = window.confirm(
+    "Refund the client's deposit in full? This cannot be undone."
+  );
+  if (!confirmed) {
+    return;
+  }
+  const ok = await bookingAction(id, "refund");
+  if (ok) {
+    showToast("Deposit refunded.");
+    await refreshRequestView(id);
+  }
+}
+
+/* Cancellation modal: photographers always end up refunding in full
+   (pending until issued from the request); clients follow the package
+   policy (Flexible 48h, Moderate 50% at 7 days, Strict never). Without a
+   paid deposit there is no money at risk, so the message stays generic. */
 function openCancelModal(booking) {
   const depositCents = booking.deposit_cents;
   const hasDeposit = depositCents !== null && depositCents !== undefined;
   const amount = `$${(Number(depositCents || 0) / 100).toFixed(2)}`;
+  const refundCents = Number(booking.expected_refund_cents || 0);
+  const refundAmount = `$${(refundCents / 100).toFixed(2)}`;
+  const policyLabel = cancellationPolicyLabel(booking.cancellation_policy);
   let message;
-  if (myRole === "photographer") {
-    message =
-      "Are you sure you want to cancel? Canceling as a photographer " +
-      "will issue a full refund to the client and release the date.";
-  } else if (!hasDeposit) {
-    message = "Are you sure you want to cancel this booking?";
-  } else if (booking.refundable) {
-    message =
-      `You are cancelling with enough time. Your deposit of ${amount} ` +
-      "will be fully refunded.";
-  } else {
-    message =
-      "Warning: You are cancelling less than 7 days before the session. " +
-      `According to the policy, your deposit is non-refundable. You will lose ${amount}.`;
-  }
   let noticeText;
   let noticeTone = "success";
   if (myRole === "photographer") {
+    message =
+      "Are you sure you want to cancel? Canceling as a photographer " +
+      "issues a full refund to the client and releases the date.";
     noticeText = hasDeposit
-      ? `The client will receive a full refund of ${amount} and the date is available again.`
+      ? "The client will receive a full refund. Issue it with the " +
+        "“Refund Deposit” button in this booking."
       : "The date is available again for new bookings.";
   } else if (!hasDeposit) {
+    message = "Are you sure you want to cancel this booking?";
     noticeText =
       "No payment was collected for this booking, so nothing was charged.";
-  } else if (booking.refundable) {
+  } else if (refundCents >= Number(depositCents)) {
+    message =
+      `You are cancelling with enough time. Your deposit of ${amount} ` +
+      "will be fully refunded.";
     noticeText =
       `Your deposit of ${amount} has been refunded. ` +
       "It will return to your original payment method.";
-  } else {
-    noticeTone = "warning";
+  } else if (refundCents > 0) {
+    const percent = Math.round((refundCents / Number(depositCents)) * 100);
+    message =
+      `You will receive a ${refundAmount} refund (${percent}% of your ` +
+      `deposit) according to the ${policyLabel} policy.`;
     noticeText =
-      `Your deposit of ${amount} was retained according to the ` +
-      "7-day cancellation policy.";
+      `A refund of ${refundAmount} (${percent}% of your deposit) has been ` +
+      "processed to your original payment method.";
+  } else {
+    message =
+      `Warning: according to the ${policyLabel} policy, your deposit of ` +
+      `${amount} is non-refundable.`;
+    noticeTone = "danger";
+    noticeText =
+      "Booking cancelled. Per the policy, the deposit is non-refundable.";
   }
   let modal = document.getElementById("cancel-modal");
   if (!modal) {
@@ -2798,7 +2866,7 @@ function renderPackages(items) {
       <div class="package-card" data-highlight-id="${pkg.id}">
         <h3>${escapeHtml(pkg.title)}</h3>
         <p class="pkg-desc">${escapeHtml(pkg.description || "No description")}</p>
-        <div class="pkg-price">$${Number(pkg.price).toFixed(2)}</div>
+        <div class="pkg-price">${priceRangeLabel(pkg.price, pkg.price_max)}</div>
         <div class="pkg-actions">
           <button class="btn btn-sm" type="button" data-edit-pkg="${pkg.id}">Edit</button>
           <button class="btn btn-ghost btn-sm" type="button" data-del-pkg="${pkg.id}">Delete</button>
@@ -2996,6 +3064,11 @@ async function loadCatalog() {
   }
 }
 
+function toggleCustomPolicyFields() {
+  const policy = document.getElementById("pkg-policy").value;
+  document.getElementById("pkg-custom-policy").hidden = policy !== "custom";
+}
+
 function openPackageModal(packageId) {
   const form = document.getElementById("pkg-form");
   form.dataset.id = packageId ? String(packageId) : "";
@@ -3010,8 +3083,26 @@ function openPackageModal(packageId) {
       document.getElementById("pkg-name").value = pkg.title;
       document.getElementById("pkg-desc").value = pkg.description || "";
       document.getElementById("pkg-price").value = pkg.price;
+      document.getElementById("pkg-price-max").value = pkg.price_max || "";
+      document.getElementById("pkg-policy").value =
+        pkg.cancellation_policy || "moderate";
+      document.getElementById("pkg-policy-percent").value =
+        pkg.cancellation_refund_percent === null ||
+        pkg.cancellation_refund_percent === undefined
+          ? 100
+          : pkg.cancellation_refund_percent;
+      document.getElementById("pkg-policy-hours").value =
+        pkg.cancellation_refund_hours === null ||
+        pkg.cancellation_refund_hours === undefined
+          ? 48
+          : pkg.cancellation_refund_hours;
     }
+  } else {
+    document.getElementById("pkg-policy").value = "moderate";
+    document.getElementById("pkg-policy-percent").value = 100;
+    document.getElementById("pkg-policy-hours").value = 48;
   }
+  toggleCustomPolicyFields();
   document.getElementById("pkg-modal").hidden = false;
   document.getElementById("pkg-name").focus();
 }
@@ -3037,6 +3128,9 @@ document.getElementById("pkg-modal").addEventListener("click", (event) => {
     event.currentTarget.hidden = true;
   }
 });
+document
+  .getElementById("pkg-policy")
+  .addEventListener("change", toggleCustomPolicyFields);
 
 document.getElementById("pkg-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -3047,6 +3141,14 @@ document.getElementById("pkg-form").addEventListener("submit", async (event) => 
     title: document.getElementById("pkg-name").value.trim(),
     description: document.getElementById("pkg-desc").value.trim(),
     price: document.getElementById("pkg-price").value,
+    price_max: document.getElementById("pkg-price-max").value || null,
+    cancellation_policy: document.getElementById("pkg-policy").value,
+    cancellation_refund_percent: Number(
+      document.getElementById("pkg-policy-percent").value
+    ),
+    cancellation_refund_hours: Number(
+      document.getElementById("pkg-policy-hours").value
+    ),
   };
   const id = form.dataset.id;
   try {

@@ -347,8 +347,15 @@ class PackageEndpointsTests(TestCase):
         response = self.api.get(f"/api/packages/{self.package_ana.pk}/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["price"], "200.00")
+        self.assertIsNone(response.data["price_max"])
         self.assertEqual(response.data["profile_slug"], "ana-studio")
         self.assertEqual(response.data["studio_name"], "Ana Studio")
+        self.assertEqual(
+            response.data["cancellation_summary"],
+            "50% refund if cancelled 7 days before the shoot; the deposit "
+            "is retained after that.",
+        )
+
 
     def test_detail_unpublished_profile_package_returns_404(self):
         response = self.api.get(f"/api/packages/{self.package_caro.pk}/")
@@ -438,6 +445,61 @@ class PackageEndpointsTests(TestCase):
         payload = {"title": "Negativo", "price": "-5.00"}
         response = self.api.post("/api/packages/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_package_price_range_is_saved(self):
+        self.api.force_authenticate(self.ana)
+        payload = {
+            "title": "Boda Premium",
+            "price": "400.00",
+            "price_max": "650.00",
+        }
+        response = self.api.post("/api/packages/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["price"], "400.00")
+        self.assertEqual(response.data["price_max"], "650.00")
+
+    def test_price_range_max_below_min_is_rejected(self):
+        self.api.force_authenticate(self.ana)
+        payload = {
+            "title": "Rango invalido",
+            "price": "650.00",
+            "price_max": "400.00",
+        }
+        response = self.api.post("/api/packages/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("price_max", response.data)
+
+    def test_custom_policy_is_saved_and_summarized(self):
+        self.api.force_authenticate(self.ana)
+        payload = {
+            "title": "Sesion a medida",
+            "price": "300.00",
+            "cancellation_policy": "custom",
+            "cancellation_refund_percent": 25,
+            "cancellation_refund_hours": 72,
+        }
+        response = self.api.post("/api/packages/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["cancellation_policy"], "custom")
+        self.assertEqual(response.data["cancellation_refund_percent"], 25)
+        self.assertEqual(response.data["cancellation_refund_hours"], 72)
+        self.assertEqual(
+            response.data["cancellation_summary"],
+            "25% refund if cancelled at least 72 hours before the shoot; "
+            "the deposit is retained after that.",
+        )
+
+    def test_custom_policy_percent_above_100_is_rejected(self):
+        self.api.force_authenticate(self.ana)
+        payload = {
+            "title": "Exagerado",
+            "price": "300.00",
+            "cancellation_policy": "custom",
+            "cancellation_refund_percent": 150,
+        }
+        response = self.api.post("/api/packages/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cancellation_refund_percent", response.data)
 
 
 class PortfolioPhotoEndpointsTests(TestCase):

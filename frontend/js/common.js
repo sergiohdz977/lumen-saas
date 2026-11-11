@@ -579,6 +579,51 @@ const STATUS_LABELS = {
   refunded: "refunded",
 };
 
+const CANCELLATION_POLICY_LABELS = {
+  flexible: "Flexible",
+  moderate: "Moderate",
+  strict: "Strict",
+};
+
+const CANCELLATION_POLICY_TEXTS = {
+  flexible:
+    "Cancel at least 48 hours before the shoot and your deposit is " +
+    "refunded in full to your original payment method. Cancellations " +
+    "inside the last 48 hours keep the deposit.",
+  moderate:
+    "Cancel at least 7 days before the shoot and 50% of your deposit is " +
+    "refunded. Cancellations inside the last 7 days keep the deposit.",
+  strict:
+    "The deposit is non-refundable once the booking is confirmed, " +
+    "regardless of when you cancel.",
+};
+
+function cancellationPolicyLabel(policy) {
+  return CANCELLATION_POLICY_LABELS[policy] || "Moderate";
+}
+
+function moneyLabel(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    return "$0";
+  }
+  return amount % 1 === 0 ? `$${amount.toFixed(0)}` : `$${amount.toFixed(2)}`;
+}
+
+function priceRangeLabel(min, max) {
+  const minLabel = moneyLabel(min);
+  const maxValue =
+    max === null || max === undefined || max === "" ? null : Number(max);
+  if (
+    maxValue === null ||
+    !Number.isFinite(maxValue) ||
+    maxValue <= Number(min)
+  ) {
+    return minLabel;
+  }
+  return `${minLabel} – ${moneyLabel(maxValue)}`;
+}
+
 function statusChip(status) {
   const label = STATUS_LABELS[status] || status;
   return `<span class="status-chip status-${escapeHtml(

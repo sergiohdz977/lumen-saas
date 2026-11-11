@@ -12,6 +12,12 @@ class BookingRequest(models.Model):
         REJECTED = "rejected", "Rejected"
         CANCELLED = "cancelled", "Cancelled"
 
+    class PaymentStatus(models.TextChoices):
+        NONE = "none", "None"
+        RETAINED = "retained", "Deposit retained"
+        REFUND_PENDING = "refund_pending", "Refund pending"
+        REFUNDED = "refunded", "Refunded"
+
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -34,6 +40,12 @@ class BookingRequest(models.Model):
         max_length=30,
         choices=Status.choices,
         default=Status.REQUESTED,
+    )
+    policy_accepted = models.BooleanField(default=False)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.NONE,
     )
     deposit_deadline = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
