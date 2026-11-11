@@ -7,6 +7,7 @@ class Payment(models.Model):
         PENDING = "pending", "Pending"
         PAID = "paid", "Paid"
         FAILED = "failed", "Failed"
+        REFUNDED = "refunded", "Refunded"
 
     class Kind(models.TextChoices):
         DEPOSIT = "deposit", "Deposit"

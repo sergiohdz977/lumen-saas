@@ -10,7 +10,7 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="css/styles.css?v=50" />
+  <link rel="stylesheet" href="css/styles.css?v=59" />
 </head>
 <body>
   <header class="site-header">
@@ -81,7 +81,7 @@
           <button class="tab" type="button" data-tab="packages" data-roles="photographer" hidden>Packages</button>
           <button class="tab" type="button" data-tab="catalog" data-roles="photographer" hidden>Portfolio</button>
           <button class="tab" type="button" data-tab="favorites" data-roles="customer" hidden>Favorites</button>
-          <button class="tab" type="button" data-tab="reviews" data-roles="customer" hidden>My reviews</button>
+          <button class="tab" type="button" data-tab="reviews" hidden>Reviews</button>
           <button class="tab" type="button" data-tab="payments">Payments</button>
           <button class="tab" type="button" data-tab="profile">Settings</button>
         </div>
@@ -93,6 +93,7 @@
         </div>
 
         <section class="panel tab-panel" data-panel="overview">
+          <div id="getting-started" class="getting-started" hidden></div>
           <div id="overview-cards" class="ov-grid"></div>
         </section>
 
@@ -246,6 +247,9 @@
             <button class="filter-chip" type="button" data-filter="accepted">
               Accepted <span class="filter-count">0</span>
             </button>
+            <button class="filter-chip" type="button" data-filter="cancelled">
+              Cancelled <span class="filter-count">0</span>
+            </button>
           </div>
           <div id="requests-list"><p class="meta">No booking requests yet.</p></div>
 
@@ -315,9 +319,9 @@
           <div id="favorites-list"><p class="meta">No favorites yet — tap the star on your gallery photos.</p></div>
         </section>
 
-        <section class="panel tab-panel" data-panel="reviews" data-roles="customer" hidden>
-          <h2>My reviews</h2>
-          <div id="my-reviews-list"><p class="meta">You have not reviewed anyone yet.</p></div>
+        <section class="panel tab-panel" data-panel="reviews" hidden>
+          <h2 id="my-reviews-title">My reviews</h2>
+          <div id="my-reviews-list"><p class="meta">Reviews will appear here.</p></div>
         </section>
 
         <section class="panel tab-panel" data-panel="payments" hidden>
@@ -453,23 +457,16 @@
     </div>
   </div>
 
-  <div id="review-modal" class="modal" hidden>
+  <div id="reply-modal" class="modal" hidden>
     <div class="modal-panel">
-      <button class="modal-close" id="review-close" type="button" aria-label="Close">&times;</button>
-      <h2 id="review-modal-title">My review</h2>
-      <form id="review-form">
-        <label for="review-rating">Rating</label>
-        <select id="review-rating" required>
-          <option value="5">★★★★★ Excellent</option>
-          <option value="4">★★★★☆ Good</option>
-          <option value="3">★★★☆☆ Okay</option>
-          <option value="2">★★☆☆☆ Poor</option>
-          <option value="1">★☆☆☆☆ Very poor</option>
-        </select>
-        <label for="review-comment">Comment (optional)</label>
-        <textarea id="review-comment" rows="3"></textarea>
-        <p id="review-error" class="form-error" hidden></p>
-        <button class="btn btn-block" type="submit">Save review</button>
+      <button class="modal-close" id="reply-close" type="button" aria-label="Close">&times;</button>
+      <h2 id="reply-modal-title">Reply to review</h2>
+      <p class="meta">Your reply is public and appears under the review. You can reply only once.</p>
+      <form id="reply-form">
+        <label for="reply-text">Reply</label>
+        <textarea id="reply-text" rows="3" maxlength="500" placeholder="Thank you for your words…"></textarea>
+        <p id="reply-error" class="form-error" hidden></p>
+        <button class="btn btn-block" type="submit">Post reply</button>
       </form>
     </div>
   </div>
@@ -553,7 +550,7 @@
     <span class="lb-counter" id="pf-counter"></span>
   </div>
 
-  <script src="js/common.js?v=50"></script>
-  <script src="js/dashboard.js?v=50"></script>
+  <script src="js/common.js?v=59"></script>
+  <script src="js/dashboard.js?v=59"></script>
 </body>
 </html>

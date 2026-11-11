@@ -8,6 +8,8 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from clients.models import Client
+from galleries.models import Gallery
+from payments.models import Payment
 from profiles.models import Package, PhotographerProfile
 from shoots.models import Shoot
 from users.models import User
@@ -834,3 +836,195 @@ class DepositDeadlineTests(TestCase):
         enforce_deposit_deadline(self.booking.pk)
         self.booking.refresh_from_db()
         self.assertEqual(self.booking.status, BookingRequest.Status.ACCEPTED)
+
+
+class CancellationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.otra = User.objects.create_user(
+            username="otra",
+            email="otra@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.ana_profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+            is_published=True,
+        )
+        cls.package = Package.objects.create(
+            profile=cls.ana_profile,
+            title="Boda completa",
+            price=200,
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def _booking(self, days=30, status=BookingRequest.Status.ACCEPTED):
+        return BookingRequest.objects.create(
+            customer=self.maria,
+            package=self.package,
+            date=timezone.now() + timedelta(days=days),
+            status=status,
+        )
+
+    def _with_shoot(self, booking):
+        client, _ = Client.objects.get_or_create(
+            photographer=self.ana,
+            user=self.maria,
+            defaults={"name": "Maria F", "email": "", "phone": ""},
+        )
+        return Shoot.objects.create(
+            client=client,
+            title="Boda completa - maria",
+            shoot_type="boda",
+            date=booking.date,
+            booking=booking,
+        )
+
+    def _with_deposit(self, booking, amount_cents=4000):
+        return Payment.objects.create(
+            booking=booking,
+            kind=Payment.Kind.DEPOSIT,
+            customer=self.maria,
+            photographer=self.ana,
+            amount_cents=amount_cents,
+            status=Payment.Status.PAID,
+            stripe_session_id=f"cs_test_{booking.pk}",
+            paid_at=timezone.now(),
+        )
+
+    def _cancel(self, user, booking):
+        self.api.force_authenticate(user)
+        return self.api.post(
+            f"/api/bookings/{booking.pk}/cancel/", format="json"
+        )
+
+    def test_client_cancel_beyond_7_days_refunds_and_frees_date(self):
+        booking = self._booking(days=30)
+        shoot = self._with_shoot(booking)
+        self._with_deposit(booking)
+        response = self._cancel(self.maria, booking)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, BookingRequest.Status.CANCELLED)
+        self.assertTrue(response.data["refundable"])
+        self.assertEqual(response.data["days_until_event"], 30)
+        self.assertEqual(response.data["deposit_cents"], 4000)
+        # Date freed: the shoot had no gallery, so it was dropped.
+        self.assertFalse(Shoot.objects.filter(pk=shoot.pk).exists())
+        refunds = booking.payments.filter(status=Payment.Status.REFUNDED)
+        self.assertEqual(refunds.count(), 1)
+        self.assertEqual(refunds.first().amount_cents, 4000)
+        # The original paid deposit stays for the audit trail.
+        self.assertEqual(
+            booking.payments.filter(status=Payment.Status.PAID).count(), 1
+        )
+        system = booking.messages.filter(sender=None)
+        self.assertEqual(
+            system.last().text,
+            "System: The client has cancelled this booking.",
+        )
+
+    def test_client_cancel_within_7_days_retains_deposit(self):
+        booking = self._booking(days=3)
+        self._with_shoot(booking)
+        self._with_deposit(booking)
+        response = self._cancel(self.maria, booking)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["refundable"])
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, BookingRequest.Status.CANCELLED)
+        self.assertEqual(
+            booking.payments.filter(status=Payment.Status.REFUNDED).count(), 0
+        )
+        self.assertEqual(
+            booking.payments.filter(status=Payment.Status.PAID).count(), 1
+        )
+
+    def test_photographer_cancel_refunds_even_within_7_days(self):
+        booking = self._booking(days=2)
+        shoot = self._with_shoot(booking)
+        self._with_deposit(booking)
+        response = self._cancel(self.ana, booking)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, BookingRequest.Status.CANCELLED)
+        self.assertEqual(
+            booking.payments.filter(status=Payment.Status.REFUNDED).count(), 1
+        )
+        self.assertFalse(Shoot.objects.filter(pk=shoot.pk).exists())
+        system = booking.messages.filter(sender=None)
+        self.assertEqual(
+            system.last().text,
+            "System: The photographer has cancelled this booking. "
+            "The deposit will be refunded.",
+        )
+
+    def test_cancel_completed_booking_is_rejected(self):
+        booking = self._booking(
+            days=30, status=BookingRequest.Status.COMPLETED
+        )
+        response = self._cancel(self.maria, booking)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, BookingRequest.Status.COMPLETED)
+
+    def test_cancel_is_scoped_to_participants(self):
+        booking = self._booking(days=30)
+        response = self._cancel(self.otra, booking)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, BookingRequest.Status.ACCEPTED)
+
+    def test_cancelled_booking_with_gallery_keeps_it_and_frees_date(self):
+        from galleries.models import Gallery
+
+        booking = self._booking(days=30)
+        shoot = self._with_shoot(booking)
+        Gallery.objects.create(shoot=shoot)
+        response = self._cancel(self.ana, booking)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, BookingRequest.Status.CANCELLED)
+        # The gallery must survive: deleting the shoot would cascade.
+        self.assertTrue(Shoot.objects.filter(pk=shoot.pk).exists())
+        self.assertTrue(Gallery.objects.filter(shoot=shoot).exists())
+        # ...but the shoot is no longer an active shoot.
+        shoots_list = self.api.get("/api/shoots/")
+        self.assertEqual(shoots_list.status_code, status.HTTP_200_OK)
+        rows = shoots_list.data
+        if isinstance(rows, dict):
+            rows = rows["results"]
+        listed = [row["id"] for row in rows]
+        self.assertNotIn(shoot.pk, listed)
+        # The freed date can be booked again by another client.
+        second = BookingRequest.objects.create(
+            customer=self.otra,
+            package=self.package,
+            date=booking.date,
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            accept = self.api.post(
+                f"/api/bookings/{second.pk}/accept/", format="json"
+            )
+        self.assertEqual(accept.status_code, status.HTTP_200_OK)
+        second.refresh_from_db()
+        self.assertEqual(
+            second.status, BookingRequest.Status.AWAITING_PAYMENT
+        )
+        self.assertIsNotNone(getattr(second, "shoot", None))

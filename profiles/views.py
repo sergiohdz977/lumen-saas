@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from django.conf import settings
-from django.db.models import Avg, OuterRef, Q, Subquery
+from django.db.models import Avg, Count, OuterRef, Q, Subquery
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -63,7 +63,14 @@ class PhotographerProfileViewSet(viewsets.ModelViewSet):
                     .values("photographer_id")
                     .annotate(avg=Avg("rating"))
                     .values("avg")[:1]
-                )
+                ),
+                rating_count=Subquery(
+                    Review.objects.filter(photographer_id=OuterRef("user_id"))
+                    .order_by()
+                    .values("photographer_id")
+                    .annotate(total=Count("id"))
+                    .values("total")[:1]
+                ),
             )
             city = self.request.query_params.get("city", "").strip()
             if city:

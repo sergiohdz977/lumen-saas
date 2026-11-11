@@ -6,6 +6,7 @@ class PhotographerProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     rating_avg = serializers.SerializerMethodField()
+    rating_count = serializers.SerializerMethodField()
     profile_picture = serializers.SerializerMethodField()
     cover_image = serializers.SerializerMethodField()
 
@@ -29,6 +30,7 @@ class PhotographerProfileSerializer(serializers.ModelSerializer):
             "is_published",
             "plan",
             "rating_avg",
+            "rating_count",
             "created_at",
         ]
         read_only_fields = [
@@ -38,6 +40,7 @@ class PhotographerProfileSerializer(serializers.ModelSerializer):
             "username",
             "plan",
             "rating_avg",
+            "rating_count",
             "cover_image",
             "created_at",
         ]
@@ -47,6 +50,12 @@ class PhotographerProfileSerializer(serializers.ModelSerializer):
         if value is None:
             return None
         return round(float(value), 1)
+
+    def get_rating_count(self, obj):
+        value = getattr(obj, "rating_count", None)
+        if value is None:
+            return 0
+        return int(value)
 
     def get_profile_picture(self, obj):
         return obj.profile_picture or None

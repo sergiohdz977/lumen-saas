@@ -28,6 +28,8 @@ let myRole = null;
 let myId = null;
 let photographerId = null;
 let packageItems = [];
+let reviewEligibleBookingId = null;
+let reviewsRenderedForId; // myId at paint time; repaint if /me lands later
 
 function isOwner() {
   return Boolean(myId) && photographerId != null &&
@@ -99,6 +101,11 @@ function renderProfile(p) {
   );
 
   document.getElementById("p-plan").hidden = p.plan !== "pro";
+
+  const headerRatingCount = Number(p.rating_count || 0);
+  if (p.rating_avg != null && headerRatingCount > 0) {
+    showRating(Number(p.rating_avg), headerRatingCount);
+  }
 
   document.getElementById("p-chips").innerHTML = (p.specialties || "")
     .split(",")
@@ -245,6 +252,29 @@ async function loadPortfolio() {
 }
 
 function reviewHtml(item) {
+  const replyBlock = item.reply
+    ? `<div class="review-reply">
+         <span class="meta">Reply · ${formatDate(item.replied_at)}</span>
+         <p class="review-comment">${escapeHtml(item.reply)}</p>
+       </div>`
+    : "";
+  const replyBtn =
+    isOwner() && !item.reply
+      ? `<button class="review-link" type="button" data-reply-review="${item.id}">Reply to review</button>`
+      : "";
+  // You can't report your own review — no moderation needed there.
+  const canReport = Number(item.customer) !== Number(myId);
+  const actions =
+    replyBtn || canReport
+      ? `<div class="review-actions">
+        ${replyBtn}
+        ${
+          canReport
+            ? `<button class="review-link" type="button" data-report-review="${item.id}">Report</button>`
+            : ""
+        }
+      </div>`
+      : "";
   return `
     <div class="review-row">
       <div class="review-head">
@@ -257,6 +287,8 @@ function reviewHtml(item) {
           ? `<p class="review-comment">${escapeHtml(item.comment)}</p>`
           : ""
       }
+      ${replyBlock}
+      ${actions}
     </div>`;
 }
 
@@ -264,7 +296,7 @@ function showRating(average, count) {
   const row = document.getElementById("p-rating");
   document.getElementById("p-rating-stars").innerHTML = starsHtml(average);
   document.getElementById("p-rating-label").textContent =
-    `${average.toFixed(1)} · ${count} review${count === 1 ? "" : "s"}`;
+    `${average.toFixed(1)} · Rated by ${count} client${count === 1 ? "" : "s"}`;
   row.hidden = false;
 }
 
@@ -305,12 +337,31 @@ async function loadReviews() {
         '<p class="meta">No reviews yet — be the first.</p>';
     } else {
       reviewsList.innerHTML = items.map(reviewHtml).join("");
+      reviewsList
+        .querySelectorAll("[data-report-review]")
+        .forEach((button) => {
+          button.addEventListener("click", () => openReportModal());
+        });
+      reviewsList
+        .querySelectorAll("[data-reply-review]")
+        .forEach((button) => {
+          button.addEventListener("click", () =>
+            openProfileReplyModal(button.dataset.replyReview)
+          );
+        });
       const average =
         items.reduce((sum, item) => sum + Number(item.rating), 0) /
         items.length;
       showRating(average, data.count || items.length);
     }
     updateReviewCta();
+    reviewsRenderedForId = myId;
+    if (window.location.hash === "#reviews-section") {
+      document.getElementById("reviews-section").scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
   } catch (error) {
     console.error(error);
   }
@@ -352,6 +403,11 @@ async function loadMe() {
     renderPackageCards();
   }
   updateReviewCta();
+  // Reviews may have painted before myId landed; repaint so owner-only
+  // controls (Reply) appear on your own profile.
+  if (reviewsRenderedForId !== undefined && reviewsRenderedForId !== myId) {
+    loadReviews();
+  }
 }
 
 function renderLightbox() {
@@ -415,6 +471,16 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape" && !reviewModal.hidden) {
     closeReviewModal();
+    return;
+  }
+  const reportModal = document.getElementById("report-modal");
+  const replyModal = document.getElementById("reply-modal");
+  if (event.key === "Escape" && reportModal && !reportModal.hidden) {
+    reportModal.hidden = true;
+    return;
+  }
+  if (event.key === "Escape" && replyModal && !replyModal.hidden) {
+    replyModal.hidden = true;
   }
 });
 
@@ -481,12 +547,67 @@ async function handleBookSubmit(event) {
   }
 }
 
-function openReviewModal() {
+/* Only customers with a completed session for this photographer can review:
+   we look for the booking up front (the reviews API will reject a repeat
+   anyway, but catching it here keeps the modal out of dead-end states). */
+async function checkReviewEligibility() {
+  const outcome = { bookingId: null, already: false };
+  if (!photographerId) {
+    return outcome;
+  }
+  try {
+    const [reviewsResponse, bookingsResponse] = await Promise.all([
+      apiFetch(`/reviews/?photographer=${photographerId}`, {
+        silentAuth: true,
+      }),
+      apiFetch("/bookings/", { silentAuth: true }),
+    ]);
+    if (reviewsResponse.ok) {
+      const data = await reviewsResponse.json();
+      outcome.already = (data.results || []).some(
+        (item) => Number(item.customer) === Number(myId)
+      );
+    }
+    if (bookingsResponse.ok) {
+      let page = await bookingsResponse.json();
+      for (let guard = 0; guard < 5 && page; guard += 1) {
+        const found = (page.results || []).find(
+          (item) => item.profile_slug === slug && item.status === "completed"
+        );
+        if (found) {
+          outcome.bookingId = found.id;
+          break;
+        }
+        if (page.next) {
+          const nextResponse = await apiFetch(page.next, { silentAuth: true });
+          page = nextResponse.ok ? await nextResponse.json() : null;
+        } else {
+          page = null;
+        }
+      }
+    }
+  } catch (error) {
+    console.error(error);
+  }
+  return outcome;
+}
+
+async function openReviewModal() {
   if (!requireLogin()) {
     return;
   }
   reviewError.hidden = true;
   reviewForm.reset();
+  const check = await checkReviewEligibility();
+  if (check.already) {
+    showToast("You have already reviewed this session.");
+    return;
+  }
+  if (!check.bookingId) {
+    showToast("You can only review photographers you have worked with");
+    return;
+  }
+  reviewEligibleBookingId = check.bookingId;
   reviewModal.hidden = false;
   document.getElementById("review-rating").focus();
 }
@@ -506,6 +627,7 @@ async function handleReviewSubmit(event) {
       method: "POST",
       body: {
         photographer: photographerId,
+        booking: reviewEligibleBookingId,
         rating: Number(document.getElementById("review-rating").value),
         comment: document.getElementById("review-comment").value.trim(),
       },
@@ -527,6 +649,116 @@ async function handleReviewSubmit(event) {
   }
 }
 
+/* Simulated moderation: collects the reason and confirms locally. */
+function openReportModal() {
+  let modal = document.getElementById("report-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "report-modal";
+    modal.className = "modal";
+    modal.hidden = true;
+    modal.innerHTML = `
+      <div class="modal-panel">
+        <button id="report-close" class="modal-close" type="button" aria-label="Close">&times;</button>
+        <h2>Report review</h2>
+        <p class="modal-sub">Tell us why this review should be checked by our team.</p>
+        <form id="report-form">
+          <label for="report-reason">Reason</label>
+          <textarea id="report-reason" rows="4" maxlength="500" placeholder="Describe the problem…" required></textarea>
+          <button class="btn btn-block" type="submit">Send report</button>
+        </form>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        modal.hidden = true;
+      }
+    });
+    document.getElementById("report-close").addEventListener("click", () => {
+      modal.hidden = true;
+    });
+    document
+      .getElementById("report-form")
+      .addEventListener("submit", (event) => {
+        event.preventDefault();
+        modal.hidden = true;
+        showToast("Thanks — our team will review this report.");
+      });
+  }
+  modal.hidden = false;
+}
+
+/* One public reply per review, written from the profile page. */
+function openProfileReplyModal(reviewId) {
+  let modal = document.getElementById("reply-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "reply-modal";
+    modal.className = "modal";
+    modal.hidden = true;
+    modal.innerHTML = `
+      <div class="modal-panel">
+        <button id="reply-close" class="modal-close" type="button" aria-label="Close">&times;</button>
+        <h2 id="reply-modal-title">Reply to review</h2>
+        <p class="modal-sub">Your reply is public and appears under the review.</p>
+        <form id="reply-form">
+          <label for="reply-text">Reply</label>
+          <textarea id="reply-text" rows="4" maxlength="500" placeholder="Thank the client or add context…" required></textarea>
+          <p id="reply-error" class="form-error" hidden></p>
+          <button class="btn btn-block" type="submit">Post reply</button>
+        </form>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        modal.hidden = true;
+      }
+    });
+    document.getElementById("reply-close").addEventListener("click", () => {
+      modal.hidden = true;
+    });
+    document
+      .getElementById("reply-form")
+      .addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const errorBox = document.getElementById("reply-error");
+        errorBox.hidden = true;
+        const text = document.getElementById("reply-text").value.trim();
+        if (!text) {
+          errorBox.textContent = "Write a reply first.";
+          errorBox.hidden = false;
+          return;
+        }
+        try {
+          const response = await apiFetch(
+            `/reviews/${modal.dataset.review}/reply/`,
+            {
+              method: "POST",
+              body: { reply: text },
+            }
+          );
+          if (!response.ok) {
+            errorBox.textContent = await readError(response);
+            errorBox.hidden = false;
+            return;
+          }
+          modal.hidden = true;
+          showToast("Reply posted.");
+          loadReviews();
+        } catch (error) {
+          console.error(error);
+          errorBox.textContent = "Could not reach the API.";
+          errorBox.hidden = false;
+        }
+      });
+  }
+  modal.dataset.review = String(reviewId);
+  document.getElementById("reply-error").hidden = true;
+  document.getElementById("reply-text").value = "";
+  modal.hidden = false;
+  document.getElementById("reply-text").focus();
+}
+
 document.getElementById("packages-grid").addEventListener("click", (event) => {
   const button = event.target.closest(".pkg-book");
   if (!button) {
@@ -534,6 +766,9 @@ document.getElementById("packages-grid").addEventListener("click", (event) => {
   }
   if (button.dataset.action === "edit") {
     window.location.href = `dashboard.html?tab=packages&item=${button.dataset.packageId}`;
+    return;
+  }
+  if (!requireLogin()) {
     return;
   }
   openBookModal(button.dataset.packageId, button.dataset.title);

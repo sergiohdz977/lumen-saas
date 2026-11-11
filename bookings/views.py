@@ -41,10 +41,16 @@ def ensure_shoot_and_client(booking):
                 return booking.shoot
         except ObjectDoesNotExist:  # pragma: no cover - reverse one-to-one
             pass
-        has_conflict = Shoot.objects.filter(
-            client__photographer=photographer,
-            date__date=booking.date.date(),
-        ).exists()
+        has_conflict = (
+            Shoot.objects.filter(
+                client__photographer=photographer,
+                date__date=booking.date.date(),
+            )
+            # Cancelled bookings keep their shoot only when a gallery hangs
+            # off it, so their date must not block new bookings.
+            .exclude(booking__status=BookingRequest.Status.CANCELLED)
+            .exists()
+        )
         if has_conflict:
             raise ValidationError("You already have a shoot booked that day")
         client, _ = Client.objects.get_or_create(
@@ -303,6 +309,101 @@ class BookingRequestViewSet(viewsets.ModelViewSet):
             ),
             link=_booking_link(booking),
         )
+        return Response(self.get_serializer(booking).data)
+
+    CANCELABLE_STATUSES = (
+        BookingRequest.Status.REQUESTED,
+        BookingRequest.Status.AWAITING_PAYMENT,
+        BookingRequest.Status.ACCEPTED,
+    )
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        """Either party cancels the booking.
+
+        The photographer cancelling always refunds the deposit in full;
+        the client follows the 7-day policy (>7 days out: refundable,
+        7 or fewer: retained). The freed date is guaranteed by deleting
+        the shoot when it has no gallery, and by the CANCELLED exclusion
+        in ensure_shoot_and_client when the gallery must survive.
+        """
+        booking = self.get_object()
+        if booking.status not in self.CANCELABLE_STATUSES:
+            raise ValidationError("Only active bookings can be cancelled")
+        by_photographer = request.user == booking.package.profile.user
+        days_left = (booking.date.date() - timezone.now().date()).days
+        should_refund = by_photographer or days_left > 7
+        had_deposit = booking.payments.filter(
+            kind=Payment.Kind.DEPOSIT, status=Payment.Status.PAID
+        ).exists()
+        refunded_cents = 0
+        with transaction.atomic():
+            booking.status = BookingRequest.Status.CANCELLED
+            booking.save(update_fields=["status"])
+            if should_refund:
+                for deposit in booking.payments.filter(
+                    kind=Payment.Kind.DEPOSIT,
+                    status=Payment.Status.PAID,
+                ):
+                    Payment.objects.create(
+                        booking=booking,
+                        kind=Payment.Kind.DEPOSIT,
+                        customer=deposit.customer,
+                        photographer=deposit.photographer,
+                        amount_cents=deposit.amount_cents,
+                        status=Payment.Status.REFUNDED,
+                        stripe_session_id=f"refund_{uuid4().hex[:32]}",
+                        paid_at=timezone.now(),
+                    )
+                    refunded_cents += deposit.amount_cents
+            shoot = getattr(booking, "shoot", None)
+            if shoot is not None:
+                try:
+                    shoot.gallery
+                except ObjectDoesNotExist:
+                    # No gallery attached: drop the shoot to free the date.
+                    shoot.delete()
+                # With a gallery the shoot must stay (CASCADE would take
+                # the gallery with it); the date is freed by the CANCELLED
+                # exclusion in the conflict check instead.
+        Message.objects.create(
+            booking=booking,
+            sender=None,
+            text=(
+                "System: The photographer has cancelled this booking. "
+                "The deposit will be refunded."
+                if by_photographer
+                else "System: The client has cancelled this booking."
+            ),
+        )
+        if by_photographer:
+            refund_note = (
+                "The deposit will be refunded."
+                if refunded_cents
+                else "No deposit had been collected."
+            )
+            notify(
+                booking.customer,
+                "Booking cancelled",
+                f'The photographer cancelled "{booking.package.title}". '
+                f"{refund_note}",
+                link=_booking_link(booking),
+            )
+        else:
+            if refunded_cents:
+                refund_note = "The deposit was refunded."
+            elif had_deposit:
+                refund_note = "The deposit was retained per the 7-day policy."
+            else:
+                refund_note = ""
+            notify(
+                booking.package.profile.user,
+                "Booking cancelled",
+                f'{booking.customer.username} cancelled '
+                f'"{booking.package.title}".'
+                + (f" {refund_note}" if refund_note else ""),
+                link=_booking_link(booking),
+            )
         return Response(self.get_serializer(booking).data)
 
     # -------------------------------- chat ---------------------------------

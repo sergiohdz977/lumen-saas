@@ -158,6 +158,14 @@ async function verifyToken() {
   }
 }
 
+/* Same-page return after login/register; only local *.html pages allowed. */
+function safeNextPage() {
+  const next = auto.get("next");
+  return next && /^[a-z0-9._-]+\.html(\?[a-z0-9&=_.%-]*)?$/i.test(next)
+    ? next
+    : null;
+}
+
 async function handleLogin(event) {
   event.preventDefault();
   loginError.hidden = true;
@@ -188,6 +196,11 @@ async function handleLogin(event) {
     verifyToken();
     showToast(`Welcome back, ${username}!`);
     const me = await fetchMe().catch(() => null);
+    const next = safeNextPage();
+    if (next) {
+      window.location.href = next;
+      return;
+    }
     if (me && me.role === "photographer") {
       window.location.href = "dashboard.html";
     }
@@ -238,15 +251,13 @@ async function handleRegister(event) {
     closeAuth();
     header.update();
     verifyToken();
-    if (login.ok && role === "photographer") {
+    // Registration flows straight to the dashboard for every role (the
+    // first-visit product tour greets them there).
+    if (login.ok) {
       window.location.href = "dashboard.html";
       return;
     }
-    showToast(
-      role === "photographer"
-        ? "Account created! Set up your studio from the dashboard."
-        : "Account created! Pick a photographer and book your first session."
-    );
+    showToast("Account created! Log in to continue.");
   } catch (error) {
     registerError.textContent =
       "Could not reach the API. Is the server running?";

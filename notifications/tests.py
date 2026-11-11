@@ -160,10 +160,14 @@ class NotifyIntegrationTests(TestCase):
 
     def test_new_review_notifies_the_photographer(self):
         self.api.force_authenticate(self.maria)
+        BookingRequest.objects.filter(pk=self.booking.pk).update(
+            status=BookingRequest.Status.COMPLETED
+        )
         response = self.api.post(
             "/api/reviews/",
             {
                 "photographer": self.ana.pk,
+                "booking": self.booking.pk,
                 "rating": 5,
                 "comment": "Hermosa",
             },
@@ -172,7 +176,7 @@ class NotifyIntegrationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         note = Notification.objects.get(user=self.ana)
         self.assertEqual(note.title, "New review")
-        self.assertEqual(note.link, "dashboard.html?tab=overview")
+        self.assertEqual(note.link, "dashboard.html?tab=reviews")
 
     def test_gallery_creation_notifies_the_customer(self):
         self.api.force_authenticate(self.ana)

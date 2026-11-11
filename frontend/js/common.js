@@ -155,11 +155,278 @@ function showToast(message) {
   }, 4000);
 }
 
+/* Professional notice card: floats at the top-right of the viewport
+   (outside the sidebar) and disappears as soon as the user taps
+   anywhere else, presses Escape or hits the X. */
+function showNotice({ title, text, tone = "success" } = {}) {
+  const old = document.getElementById("notice");
+  if (old) {
+    old.remove();
+  }
+  const notice = document.createElement("div");
+  notice.id = "notice";
+  notice.className = `notice notice-${tone}`;
+  notice.setAttribute("role", "status");
+  notice.innerHTML = `
+    <span class="notice-icon" aria-hidden="true">${
+      tone === "success" ? "✓" : "!"
+    }</span>
+    <div class="notice-body">
+      <strong>${escapeHtml(title || "")}</strong>
+      <p>${escapeHtml(text || "")}</p>
+    </div>
+    <button class="notice-close" type="button" aria-label="Dismiss">&times;</button>`;
+  document.body.appendChild(notice);
+  requestAnimationFrame(() => notice.classList.add("is-visible"));
+
+  const detach = () => {
+    document.removeEventListener("pointerdown", onOutside, true);
+    document.removeEventListener("keydown", onKey, true);
+    clearTimeout(autoHide);
+  };
+  const hide = () => {
+    if (!notice.isConnected) {
+      return;
+    }
+    detach();
+    notice.classList.remove("is-visible");
+    setTimeout(() => {
+      if (notice.isConnected) {
+        notice.remove();
+      }
+    }, 220);
+  };
+  const onOutside = (event) => {
+    if (!notice.contains(event.target)) {
+      hide();
+    }
+  };
+  const onKey = (event) => {
+    if (event.key === "Escape") {
+      hide();
+    }
+  };
+  notice
+    .querySelector(".notice-close")
+    .addEventListener("click", hide);
+  document.addEventListener("pointerdown", onOutside, true);
+  document.addEventListener("keydown", onKey, true);
+  const autoHide = setTimeout(hide, 9000);
+}
+
 /* Demo mode: this demo cannot use a real Stripe account (no verified
-   business / country restrictions), so the frontend simulates checkout
-   through /api/payments/simulate/. The real flow only runs when this
-   flag is false (payments/services.py -> start_checkout). */
+   business / country restrictions), so the frontend settles checkout
+   through /api/payments/simulate/ with an in-app card form. The real
+   flow only runs when this flag is false (payments/services.py -> start_checkout). */
 const STRIPE_DEMO_MODE = true;
+
+const CARD_DECLINES = {
+  "4000000000000002": "Your card was declined.",
+  "4000000000009995": "Your card has insufficient funds.",
+  "4000000000000127": "Your card's security code is incorrect.",
+};
+
+function detectCardBrand(digits) {
+  if (/^4/.test(digits)) return "visa";
+  if (/^5[1-5]/.test(digits) || /^2[2-7]/.test(digits)) return "mastercard";
+  if (/^3[47]/.test(digits)) return "amex";
+  return "";
+}
+
+function luhnValid(digits) {
+  let sum = 0;
+  let alt = false;
+  for (let i = digits.length - 1; i >= 0; i -= 1) {
+    let n = Number(digits[i]);
+    if (alt) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    alt = !alt;
+  }
+  return digits.length > 0 && sum % 10 === 0;
+}
+
+function formatCardNumber(value) {
+  const digits = String(value).replace(/\D/g, "").slice(0, 19);
+  if (/^3[47]/.test(digits)) {
+    return [digits.slice(0, 4), digits.slice(4, 10), digits.slice(10, 15)]
+      .filter(Boolean)
+      .join(" ");
+  }
+  return digits.replace(/(.{4})/g, "$1 ").trim();
+}
+
+function formatCardExpiry(value) {
+  const digits = String(value).replace(/\D/g, "").slice(0, 4);
+  return digits.length > 2
+    ? `${digits.slice(0, 2)} / ${digits.slice(2)}`
+    : digits;
+}
+
+function expiryValid(expiryDigits) {
+  if (expiryDigits.length < 4) {
+    return false;
+  }
+  const month = Number(expiryDigits.slice(0, 2));
+  const year = 2000 + Number(expiryDigits.slice(2, 4));
+  if (month < 1 || month > 12) {
+    return false;
+  }
+  const now = new Date();
+  if (year < now.getFullYear()) {
+    return false;
+  }
+  return !(year === now.getFullYear() && month < now.getMonth() + 1);
+}
+
+function checkoutDigits(id) {
+  return (document.getElementById(id).value || "").replace(/\D/g, "");
+}
+
+function checkoutComplete() {
+  const digits = checkoutDigits("card-number");
+  const brand = detectCardBrand(digits);
+  const minNumber = brand === "amex" ? 15 : 13;
+  const minCvc = brand === "amex" ? 4 : 3;
+  return (
+    digits.length >= minNumber &&
+    checkoutDigits("card-expiry").length === 4 &&
+    checkoutDigits("card-cvc").length >= minCvc
+  );
+}
+
+function setCheckoutFieldError(fieldId, message) {
+  document.getElementById(fieldId).classList.add("is-error");
+  const errorBox = document.getElementById("card-error");
+  errorBox.textContent = message;
+  errorBox.hidden = false;
+}
+
+function clearCheckoutErrors() {
+  ["card-number-field", "card-expiry-field", "card-cvc-field"].forEach((id) => {
+    document.getElementById(id).classList.remove("is-error");
+  });
+  document.getElementById("card-error").hidden = true;
+}
+
+function renderCardBrands() {
+  const digits = checkoutDigits("card-number");
+  const brand = detectCardBrand(digits);
+  const target = document.getElementById("card-brands");
+  if (brand === "visa") {
+    target.innerHTML = '<span class="brand-badge brand-visa">VISA</span>';
+  } else if (brand === "mastercard") {
+    target.innerHTML =
+      '<svg class="brand-badge" viewBox="0 0 36 22" width="30" height="19" aria-hidden="true">' +
+      '<circle cx="14" cy="11" r="9" fill="#EB001B"/>' +
+      '<circle cx="22" cy="11" r="9" fill="#F79E1B" fill-opacity="0.9"/>' +
+      "</svg>";
+  } else if (brand === "amex") {
+    target.innerHTML = '<span class="brand-badge brand-amex">AMEX</span>';
+  } else {
+    target.innerHTML = "";
+  }
+  document.getElementById("card-number").maxLength = brand === "amex" ? 17 : 19;
+  document.getElementById("card-cvc").maxLength = brand === "amex" ? 4 : 3;
+}
+
+function updateCheckoutPayState() {
+  const button = document.getElementById("sim-confirm");
+  button.disabled =
+    button.dataset.ready !== "true" || !checkoutComplete();
+}
+
+async function submitSimulatedPayment(closeSim) {
+  const errorBox = document.getElementById("card-error");
+  clearCheckoutErrors();
+  const numberInput = document.getElementById("card-number");
+  const cvcInput = document.getElementById("card-cvc");
+  const digits = numberInput.value.replace(/\D/g, "");
+  const expiry = checkoutDigits("card-expiry");
+  const cvc = cvcInput.value.replace(/\D/g, "");
+  const brand = detectCardBrand(digits);
+  const minNumber = brand === "amex" ? 15 : 13;
+  const minCvc = brand === "amex" ? 4 : 3;
+
+  if (digits.length < minNumber) {
+    setCheckoutFieldError(
+      "card-number-field",
+      "Your card number is incomplete."
+    );
+    return;
+  }
+  if (!luhnValid(digits)) {
+    setCheckoutFieldError("card-number-field", "Your card number is invalid.");
+    return;
+  }
+  if (expiry.length < 4) {
+    setCheckoutFieldError(
+      "card-expiry-field",
+      "Your card's expiration date is incomplete."
+    );
+    return;
+  }
+  if (!expiryValid(expiry)) {
+    setCheckoutFieldError(
+      "card-expiry-field",
+      "Your card's expiration date is invalid."
+    );
+    return;
+  }
+  if (cvc.length < minCvc) {
+    setCheckoutFieldError(
+      "card-cvc-field",
+      "Your card's security code is incomplete."
+    );
+    return;
+  }
+  const decline = CARD_DECLINES[digits];
+  if (decline) {
+    setCheckoutFieldError("card-number-field", decline);
+    cvcInput.value = "";
+    updateCheckoutPayState();
+    return;
+  }
+
+  const button = document.getElementById("sim-confirm");
+  const spinner = document.getElementById("pay-spinner");
+  const payText = document.getElementById("pay-text");
+  const originalLabel = payText.textContent;
+  button.disabled = true;
+  spinner.hidden = false;
+  payText.textContent = "Processing…";
+  await new Promise((resolve) => setTimeout(resolve, 900));
+
+  try {
+    const modal = document.getElementById("sim-checkout-modal");
+    const response = await apiFetch("/payments/simulate/", {
+      method: "POST",
+      body: {
+        booking: Number(modal.dataset.booking),
+        kind: modal.dataset.kind,
+      },
+    });
+    if (!response.ok) {
+      errorBox.textContent = await readError(response);
+      errorBox.hidden = false;
+      spinner.hidden = true;
+      payText.textContent = originalLabel;
+      updateCheckoutPayState();
+      return;
+    }
+    closeSim();
+    showToast("Payment successful. Refreshing...");
+    window.setTimeout(() => window.location.reload(), 1200);
+  } catch (error) {
+    console.error(error);
+    showToast("Could not reach the API.");
+    spinner.hidden = true;
+    payText.textContent = originalLabel;
+    updateCheckoutPayState();
+  }
+}
 
 function openSimulatedCheckout(bookingId, kind, details = {}) {
   const closeSim = () => {
@@ -176,20 +443,44 @@ function openSimulatedCheckout(bookingId, kind, details = {}) {
     modal.className = "modal";
     modal.hidden = true;
     modal.innerHTML = `
-      <div class="modal-panel">
+      <div class="modal-panel checkout-panel">
         <button class="modal-close" id="sim-checkout-close" type="button" aria-label="Close">&times;</button>
-        <h3>Simulated Stripe Checkout</h3>
+        <p class="checkout-kicker">
+          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M12 7V5a4 4 0 0 0-8 0v2H3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1zm-7-2a2.5 2.5 0 0 1 5 0v2H5V5z"/></svg>
+          Secure checkout
+        </p>
         <div class="sim-rows">
           <div class="kv"><span>Booking</span><strong id="sim-booking"></strong></div>
           <div class="kv"><span>Type</span><strong id="sim-kind"></strong></div>
-          <div class="kv"><span>Amount to pay</span><strong id="sim-amount">Loading...</strong></div>
+          <div class="kv"><span>Amount</span><strong id="sim-amount">Loading...</strong></div>
         </div>
-        <p class="meta">No card is charged. The payment is settled inside Lumen for the demo.</p>
-        <div class="form-actions">
-          <button class="btn" id="sim-confirm" type="button" disabled>Simulate Successful Payment</button>
-        </div>
+        <form id="card-form" novalidate>
+          <label class="checkout-label">Card information</label>
+          <div class="card-field" id="card-number-field">
+            <input id="card-number" inputmode="numeric" autocomplete="cc-number" placeholder="1234 1234 1234 1234" maxlength="19" />
+            <span class="card-brands" id="card-brands"></span>
+          </div>
+          <div class="card-field-row">
+            <div class="card-field" id="card-expiry-field">
+              <input id="card-expiry" inputmode="numeric" autocomplete="cc-exp" placeholder="MM / YY" maxlength="7" />
+            </div>
+            <div class="card-field" id="card-cvc-field">
+              <input id="card-cvc" inputmode="numeric" autocomplete="cc-csc" placeholder="CVC" maxlength="3" />
+            </div>
+          </div>
+          <p id="card-error" class="checkout-error" hidden></p>
+          <button class="btn btn-block btn-pay" id="sim-confirm" type="submit" data-ready="false" disabled>
+            <span class="pay-spinner" id="pay-spinner" hidden></span>
+            <span id="pay-text">Pay</span>
+          </button>
+        </form>
+        <p class="checkout-foot">
+          <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 7V5a4 4 0 0 0-8 0v2H3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1zM5 5a3 3 0 0 1 6 0v2H5V5z"/></svg>
+          Payments are secure and encrypted
+        </p>
       </div>`;
     document.body.appendChild(modal);
+
     modal.addEventListener("click", (event) => {
       if (
         event.target === modal ||
@@ -198,47 +489,61 @@ function openSimulatedCheckout(bookingId, kind, details = {}) {
         closeSim();
       }
     });
+    document.addEventListener("keydown", (event) => {
+      const current = document.getElementById("sim-checkout-modal");
+      if (event.key === "Escape" && current && !current.hidden) {
+        closeSim();
+      }
+    });
+
+    const numberInput = document.getElementById("card-number");
+    const expiryInput = document.getElementById("card-expiry");
+    const cvcInput = document.getElementById("card-cvc");
+    numberInput.addEventListener("input", () => {
+      numberInput.value = formatCardNumber(numberInput.value);
+      renderCardBrands();
+      clearCheckoutErrors();
+      updateCheckoutPayState();
+    });
+    expiryInput.addEventListener("input", () => {
+      expiryInput.value = formatCardExpiry(expiryInput.value);
+      clearCheckoutErrors();
+      updateCheckoutPayState();
+    });
+    cvcInput.addEventListener("input", () => {
+      cvcInput.value = cvcInput.value.replace(/\D/g, "");
+      clearCheckoutErrors();
+      updateCheckoutPayState();
+    });
     document
-      .getElementById("sim-confirm")
-      .addEventListener("click", async () => {
-        const button = document.getElementById("sim-confirm");
-        button.disabled = true;
-        try {
-          const response = await apiFetch("/payments/simulate/", {
-            method: "POST",
-            body: {
-              booking: Number(modal.dataset.booking),
-              kind: modal.dataset.kind,
-            },
-          });
-          if (!response.ok) {
-            showToast(await readError(response));
-            button.disabled = false;
-            return;
-          }
-          closeSim();
-          showToast("Payment simulated successfully. Refreshing...");
-          window.setTimeout(() => window.location.reload(), 1200);
-        } catch (error) {
-          console.error(error);
-          showToast("Could not reach the API.");
-          button.disabled = false;
-        }
+      .getElementById("card-form")
+      .addEventListener("submit", async (event) => {
+        event.preventDefault();
+        await submitSimulatedPayment(closeSim);
       });
   }
+
   modal.dataset.booking = String(bookingId);
   modal.dataset.kind = kind;
   document.getElementById("sim-booking").textContent =
     details.title || `#${bookingId}`;
   document.getElementById("sim-kind").textContent =
     kind === "balance" ? "Remaining balance (80%)" : "Deposit (20%)";
+  document.getElementById("card-number").value = "";
+  document.getElementById("card-expiry").value = "";
+  document.getElementById("card-cvc").value = "";
+  renderCardBrands();
+  clearCheckoutErrors();
+  const confirm = document.getElementById("sim-confirm");
+  confirm.dataset.ready = "false";
+  confirm.disabled = true;
+  document.getElementById("pay-spinner").hidden = true;
+  document.getElementById("pay-text").textContent = "Pay";
   const amountEl = document.getElementById("sim-amount");
   amountEl.textContent = "Loading...";
-  const confirm = document.getElementById("sim-confirm");
-  confirm.disabled = true;
   modal.hidden = false;
   document.body.style.overflow = "hidden";
-  confirm.focus();
+  document.getElementById("card-number").focus();
   apiFetch(
     `/payments/simulate/?booking=${encodeURIComponent(
       bookingId
@@ -251,8 +556,11 @@ function openSimulatedCheckout(bookingId, kind, details = {}) {
         return;
       }
       const data = await response.json();
-      amountEl.textContent = `$${(Number(data.amount_cents) / 100).toFixed(2)}`;
-      confirm.disabled = false;
+      const amountText = `$${(Number(data.amount_cents) / 100).toFixed(2)}`;
+      amountEl.textContent = amountText;
+      confirm.dataset.ready = "true";
+      document.getElementById("pay-text").textContent = `Pay ${amountText}`;
+      updateCheckoutPayState();
     })
     .catch((error) => {
       console.error(error);
@@ -268,6 +576,7 @@ const STATUS_LABELS = {
   completed: "completed",
   rejected: "rejected",
   cancelled: "cancelled",
+  refunded: "refunded",
 };
 
 function statusChip(status) {
@@ -589,12 +898,17 @@ function initBell() {
   refreshBellBadge = loadBadge;
 }
 
-/* Redirect to the login screen unless a session exists. */
+/* Redirect to the login screen unless a session exists.
+   The current page travels as `next` so login returns here. */
 function requireLogin() {
   if (isLoggedIn()) {
     return true;
   }
-  window.location.href = "index.html?login=1";
+  const page = window.location.pathname.split("/").pop();
+  const next = `${page}${window.location.search}`;
+  window.location.href = `index.html?login=1${
+    next ? `&next=${encodeURIComponent(next)}` : ""
+  }`;
   return false;
 }
 
@@ -624,4 +938,73 @@ async function fetchMe({ force = false } = {}) {
     console.error(error);
     return null;
   }
+}
+
+/* --------------------------- welcome modal ------------------------------ */
+
+const WELCOME_ICONS = {
+  camera:
+    '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 13l2.4-4.2h9.2L31 13h7a3 3 0 0 1 3 3v17a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3V16a3 3 0 0 1 3-3h7z"/><circle cx="24" cy="25" r="7.5"/></svg>',
+  user:
+    '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="24" cy="17" r="8"/><path d="M9 40c0-7.7 6.7-14 15-14s15 6.3 15 14"/></svg>',
+};
+
+/* First-time product tour for this account. Shown the first time the user
+   opens dashboard.html (localStorage `lumen_tour_seen_<username>`).
+   Returns true when the modal is on screen. `onGo` runs on the CTA click. */
+function showWelcomeOnce({ username, role, name, onGo } = {}) {
+  if (!username) {
+    return false;
+  }
+  const key = `lumen_tour_seen_${username}`;
+  try {
+    if (localStorage.getItem(key)) {
+      return false;
+    }
+    localStorage.setItem(key, "1");
+  } catch (error) {
+    console.error(error);
+  }
+  const isPhotographer = role === "photographer";
+  const title = isPhotographer
+    ? `Welcome to your Studio, ${name || username}`
+    : `Welcome to Lumen, ${name || username}`;
+  const text = isPhotographer
+    ? "This is your command center. Here you can manage your bookings, chat and negotiate with clients, manage your portfolio, and track your earnings. Let's get your business running!"
+    : "From here you can track your bookings, chat directly with photographers to negotiate details, manage your payments, and download your final photos securely.";
+  const buttonLabel = isPhotographer
+    ? "Start working"
+    : "Explore my bookings";
+  const icon = isPhotographer ? WELCOME_ICONS.camera : WELCOME_ICONS.user;
+
+  const modal = document.createElement("div");
+  modal.id = "welcome-modal";
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-panel modal-welcome">
+      <div class="welcome-hero" aria-hidden="true">${icon}</div>
+      <h2 id="welcome-title"></h2>
+      <p class="welcome-text">${escapeHtml(text)}</p>
+      <button class="btn btn-block" id="welcome-go" type="button">${escapeHtml(
+        buttonLabel
+      )}</button>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector("#welcome-title").textContent = title;
+  const close = () => {
+    modal.remove();
+  };
+  modal.querySelector("#welcome-go").addEventListener("click", () => {
+    if (typeof onGo === "function") {
+      onGo();
+    }
+    close();
+  });
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      close();
+    }
+  });
+  modal.hidden = false;
+  return true;
 }

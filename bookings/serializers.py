@@ -1,4 +1,6 @@
+from django.utils import timezone
 from rest_framework import serializers
+from payments.models import Payment
 from .models import BookingRequest, Message
 
 
@@ -49,6 +51,9 @@ class BookingRequestSerializer(serializers.ModelSerializer):
         max_digits=10, decimal_places=2, read_only=True
     )
     shoot = serializers.SerializerMethodField()
+    days_until_event = serializers.SerializerMethodField()
+    refundable = serializers.SerializerMethodField()
+    deposit_cents = serializers.SerializerMethodField()
 
     class Meta:
         model = BookingRequest
@@ -69,6 +74,9 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "status",
             "deposit_deadline",
             "shoot",
+            "days_until_event",
+            "refundable",
+            "deposit_cents",
             "created_at",
         ]
         read_only_fields = [
@@ -82,12 +90,33 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "status",
             "deposit_deadline",
             "shoot",
+            "days_until_event",
+            "refundable",
+            "deposit_cents",
             "created_at",
         ]
 
     def get_shoot(self, obj):
         shoot = getattr(obj, "shoot", None)
         return shoot.pk if shoot else None
+
+    def get_days_until_event(self, obj):
+        return (obj.date.date() - timezone.now().date()).days
+
+    def get_refundable(self, obj):
+        """Cancellation policy: deposits are refundable until 7 days out."""
+        return self.get_days_until_event(obj) > 7
+
+    def get_deposit_cents(self, obj):
+        """Amount already collected as a deposit (None when unpaid)."""
+        deposit = (
+            obj.payments.filter(
+                kind=Payment.Kind.DEPOSIT, status=Payment.Status.PAID
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        return deposit.amount_cents if deposit else None
 
     def validate_package(self, value):
         if not value.profile.is_published:

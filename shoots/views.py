@@ -10,9 +10,13 @@ class ShootViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsPhotographer]
 
     def get_queryset(self):
-        return Shoot.objects.filter(
-            client__photographer=self.request.user
-        ).select_related("client")
+        return (
+            Shoot.objects.filter(client__photographer=self.request.user)
+            # A cancelled booking keeps its shoot only as an anchor for an
+            # existing gallery; it must not show up as an active shoot.
+            .exclude(booking__status="cancelled")
+            .select_related("client")
+        )
 
     def perform_create(self, serializer):
         serializer.save(status=Shoot.Status.BOOKED)

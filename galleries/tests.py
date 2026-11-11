@@ -2,7 +2,7 @@ from io import BytesIO
 from pathlib import Path
 
 from django.conf import settings
-from django.core import mail
+from django.core import mail, signing
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from PIL import Image
@@ -16,7 +16,7 @@ from payments.models import Payment
 from profiles.models import Package, PhotographerProfile
 from shoots.models import Shoot
 from users.models import User
-from .models import Favorite, Gallery, Photo
+from .models import Favorite, Gallery, Photo, SHARE_SALT
 from .tasks import generate_photo_variants
 
 
@@ -1392,3 +1392,112 @@ class PaymentGateTests(TestCase):
             response.data["photos"][0]["image"],
             "https://example.com/original1.jpg",
         )
+
+
+class CancelledGalleryAccessTests(TestCase):
+    """A cancelled booking locks the client out of the gallery only."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user(
+            username="ana",
+            email="ana@test.com",
+            password="secret123",
+            role=User.ROLE_PHOTOGRAPHER,
+        )
+        cls.maria = User.objects.create_user(
+            username="maria",
+            email="maria@test.com",
+            password="secret123",
+            role=User.ROLE_CUSTOMER,
+        )
+        cls.ana_profile = PhotographerProfile.objects.create(
+            user=cls.ana,
+            studio_name="Ana Studio",
+            slug="ana-studio",
+            is_published=True,
+        )
+        cls.package = Package.objects.create(
+            profile=cls.ana_profile,
+            title="Boda completa",
+            price=200,
+        )
+        cls.booking = BookingRequest.objects.create(
+            customer=cls.maria,
+            package=cls.package,
+            date="2026-11-20T10:00:00Z",
+            status=BookingRequest.Status.CANCELLED,
+        )
+        cls.client_maria = Client.objects.create(
+            photographer=cls.ana, user=cls.maria, name="Maria F"
+        )
+        cls.shoot = Shoot.objects.create(
+            client=cls.client_maria,
+            title="Boda de Maria",
+            shoot_type="boda",
+            date="2026-11-20T10:00:00Z",
+            booking=cls.booking,
+        )
+        cls.gallery = Gallery.objects.create(shoot=cls.shoot)
+        cls.photo = Photo.objects.create(
+            gallery=cls.gallery,
+            image="https://example.com/foto1.jpg",
+            caption="Primera",
+        )
+
+    def setUp(self):
+        self.api = APIClient()
+
+    def test_client_loses_gallery_list(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.get("/api/galleries/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"], [])
+
+    def test_client_cannot_retrieve_gallery(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.get(f"/api/galleries/{self.gallery.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_client_loses_photo_access(self):
+        self.api.force_authenticate(self.maria)
+        listing = self.api.get("/api/photos/")
+        self.assertEqual(listing.status_code, status.HTTP_200_OK)
+        self.assertEqual(listing.data["results"], [])
+        detail = self.api.get(f"/api/photos/{self.photo.pk}/")
+        self.assertEqual(detail.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_photographer_keeps_gallery_and_photo_access(self):
+        self.api.force_authenticate(self.ana)
+        listing = self.api.get("/api/galleries/")
+        self.assertEqual(listing.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [row["id"] for row in listing.data["results"]],
+            [self.gallery.pk],
+        )
+        detail = self.api.get(f"/api/galleries/{self.gallery.pk}/")
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        photos = self.api.get("/api/photos/")
+        self.assertEqual(
+            [row["id"] for row in photos.data["results"]],
+            [self.photo.pk],
+        )
+
+    def _token(self):
+        return signing.dumps(str(self.gallery.pk), salt=SHARE_SALT)
+
+    def test_share_link_denied_for_anonymous(self):
+        anon = APIClient()
+        response = anon.get(f"/api/gallery-view/{self._token()}/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_share_link_denied_for_client(self):
+        self.api.force_authenticate(self.maria)
+        response = self.api.get(f"/api/gallery-view/{self._token()}/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_share_link_allowed_for_photographer(self):
+        self.api.force_authenticate(self.ana)
+        response = self.api.get(f"/api/gallery-view/{self._token()}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["gallery"]["id"], self.gallery.pk)

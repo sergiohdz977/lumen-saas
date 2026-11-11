@@ -105,6 +105,7 @@ class PublicProfileEndpointsTests(TestCase):
             "is_published",
             "plan",
             "rating_avg",
+            "rating_count",
             "created_at",
         }
         self.assertEqual(set(response.data.keys()), expected)
@@ -854,9 +855,25 @@ class ProfileRatingPriceFilterTests(TestCase):
         self.assertEqual(ratings["low-studio"], 3.0)
         self.assertIsNone(ratings["quiet-studio"])
 
+    def test_list_exposes_rating_count(self):
+        response = self.api.get("/api/profiles/")
+        counts = {
+            item["slug"]: item["rating_count"]
+            for item in response.data["results"]
+        }
+        self.assertEqual(counts["star-studio"], 2)
+        self.assertEqual(counts["low-studio"], 1)
+        self.assertEqual(counts["quiet-studio"], 0)
+
+    def test_profile_detail_exposes_rating_and_count(self):
+        response = self.api.get("/api/profiles/star-studio/")
+        self.assertEqual(response.data["rating_avg"], 4.5)
+        self.assertEqual(response.data["rating_count"], 2)
+
     def test_profile_without_reviews_returns_null_rating(self):
         response = self.api.get("/api/profiles/quiet-studio/")
         self.assertIsNone(response.data["rating_avg"])
+        self.assertEqual(response.data["rating_count"], 0)
 
     def test_filter_by_min_rating_keeps_only_high_rated(self):
         response = self.api.get("/api/profiles/?min_rating=4")

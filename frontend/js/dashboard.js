@@ -30,11 +30,11 @@ let portfolioItems = [];
 let activeCollectionFilter = "all"; // "all" | "none" | collection id
 let portfolioPreviewPhotos = []; // photos listed in the Portfolio tab, in view order
 let portfolioPreviewIndex = 0;
-let editingReviewId = null;
 let currentGalleryPaid = true;
 let activeRequestId = null; // booking open in the slide-in drawer
 let chatPollTimer = null;
 let pendingOpenRequest = null; // booking to open once the list loads
+let deepLinkPackageId = null; // package to edit once the catalog loads
 let requestFilter = "all"; // all | pending | accepted
 let lastRequestsData = null;
 let lastRequestsRole = "";
@@ -43,6 +43,7 @@ const REQUEST_FILTERS = {
   pending: (booking) =>
     ["requested", "awaiting_payment"].includes(booking.status),
   accepted: (booking) => booking.status === "accepted",
+  cancelled: (booking) => booking.status === "cancelled",
 };
 
 const HIGH_RES_LOCKED =
@@ -226,7 +227,10 @@ window.lumenNavigate = function (href) {
       } else if (tab === "payments") {
         loadPayments().then(finishPendingHighlight);
       } else if (tab === "packages") {
-        loadCatalog().then(finishPendingHighlight);
+        loadCatalog().then(() => {
+          finishPendingHighlight();
+          openDeepLinkedPackage();
+        });
       } else {
         finishPendingHighlight();
       }
@@ -260,6 +264,9 @@ function setupTabs() {
     pendingHighlight = { tab: requested, id: requestedItem };
     if (requested === "requests") {
       pendingOpenRequest = requestedItem;
+    }
+    if (requested === "packages") {
+      deepLinkPackageId = Number(requestedItem) || null;
     }
   }
   let target = requested;
@@ -328,6 +335,8 @@ function renderMe() {
   document.getElementById("acc-email").value = me.email;
   document.getElementById("me-role").textContent = me.role;
   document.getElementById("btn-new-gallery").hidden = me.role !== "photographer";
+  // Account details is the one section every role can see and edit.
+  setSettingsSection("account-section", true);
   setSettingsSection("billing-section", me.role === "photographer");
 
   const publicBtn = document.getElementById("btn-view-public");
@@ -365,7 +374,7 @@ function renderMe() {
   const meStripe = document.getElementById("me-stripe");
   meStripe.textContent = stripeConnected
     ? stripeDemo
-      ? "Connected (Demo Mode)"
+      ? "Connected (Test Mode)"
       : "Connected"
     : "Not connected";
   meStripe.classList.toggle("stripe-demo", stripeDemo);
@@ -422,6 +431,7 @@ function renderProfilePicture() {
     preview.removeAttribute("tabindex");
     preview.removeAttribute("aria-label");
   }
+  renderGettingStarted();
 }
 
 const cropState = {
@@ -743,7 +753,7 @@ function demoConnectStripe() {
     renderMe();
     renderPaymentActions();
     updateStripeAlert();
-    showToast("Stripe connected (Demo Mode).");
+    showToast("Stripe connected (Test Mode).");
   }, 1500);
 }
 
@@ -835,9 +845,9 @@ function renderOverview() {
         ? {
             tab: "payments",
             title: "Stripe status",
-            value: stripeDemo ? "Connected (Demo Mode)" : "Connected",
+            value: stripeDemo ? "Connected (Test Mode)" : "Connected",
             hint: stripeDemo
-              ? "Simulated for the demo"
+              ? "Test mode: no live charges are processed"
               : "Deposits go straight to your account",
             ok: stripeDemo,
           }
@@ -951,6 +961,152 @@ function renderOverview() {
       startOnboard();
     });
   }
+  renderGettingStarted();
+}
+
+/* ----------------------------- empty states ----------------------------- */
+
+const EMPTY_ICONS = {
+  clients:
+    '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="19" cy="16" r="7"/><path d="M7 39c0-6.6 5.4-12 12-12s12 5.4 12 12"/><path d="M32 11a7 7 0 0 1 0 12"/><path d="M34 27c3.8 2.4 6 6.4 6 12"/></svg>',
+  packages:
+    '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M24 5 7 13v16l17 8 17-8V13L24 5z"/><path d="M7 13l17 8 17-8"/><path d="M24 21v16"/><path d="M15.5 9l17 8"/></svg>',
+  galleries:
+    '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="10" width="36" height="28" rx="3"/><circle cx="17" cy="20" r="3.5"/><path d="M10 34l10-10 6 6 5-5 7 7"/></svg>',
+  requests:
+    '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8h20l6 14v16H8V22L14 8z"/><path d="M8 22h10l3 5h6l3-5h10"/></svg>',
+  payments:
+    '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="38" height="26" rx="3"/><path d="M5 20h38"/><path d="M13 29h9"/><path d="M31 29h4"/></svg>',
+  bell:
+    '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M24 7c-7 0-12 5-12 12v8l-4 6h32l-4-6v-8c0-7-5-12-12-12z"/><path d="M19 33a5 5 0 0 0 10 0"/></svg>',
+  star:
+    '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M24 7l5.4 11.2 12.4 1.6-9.1 8.6 2.3 12.2L24 33.7 13 40.6l2.3-12.2L6.2 19.8l12.4-1.6L24 7z"/></svg>',
+  photos:
+    '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="10" width="36" height="28" rx="3"/><circle cx="17" cy="20" r="3.5"/><path d="M10 34l10-10 6 6 5-5 7 7"/></svg>',
+};
+
+function emptyState({ icon, title, text, action, actionLabel }) {
+  return `
+    <div class="empty-state">
+      <span class="empty-state-icon">${EMPTY_ICONS[icon] || ""}</span>
+      <h4 class="empty-state-title">${escapeHtml(title)}</h4>
+      <p class="empty-state-text">${escapeHtml(text)}</p>
+      ${
+        action && actionLabel
+          ? `<button class="btn btn-sm" type="button" data-empty-action="${escapeHtml(
+              action
+            )}">${escapeHtml(actionLabel)}</button>`
+          : ""
+      }
+    </div>`;
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-empty-action]");
+  if (!button) {
+    return;
+  }
+  const action = button.dataset.emptyAction;
+  if (action === "add-client") {
+    const btn = document.getElementById("btn-add-client");
+    if (btn) {
+      btn.click();
+    }
+  } else if (action === "add-package") {
+    const btn = document.getElementById("btn-add-package");
+    if (btn) {
+      btn.click();
+    }
+  } else if (action === "add-photo") {
+    const btn = document.getElementById("btn-add-photo");
+    if (btn) {
+      btn.click();
+    }
+  } else if (action === "go-requests") {
+    activateTab("requests");
+  } else if (action === "browse") {
+    window.location.href = "index.html";
+  } else if (action === "view-profile") {
+    const slug = me && me.profile && me.profile.slug;
+    window.location.href = slug
+      ? `profile.html?slug=${encodeURIComponent(slug)}`
+      : "index.html";
+  } else if (action === "connect-stripe") {
+    startOnboard();
+  }
+});
+
+/* --------------------------- getting started ---------------------------- */
+
+function renderGettingStarted() {
+  const box = document.getElementById("getting-started");
+  if (!box) {
+    return;
+  }
+  if (myRole !== "photographer" || !me) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  const profile = me.profile || {};
+  const tasks = [
+    {
+      label: "Upload profile picture",
+      done: Boolean(profile.profile_picture),
+      action: "settings",
+    },
+    {
+      label: "Create your first package",
+      done: catalogPackages.length > 0,
+      action: "packages",
+    },
+    {
+      label: "Connect Stripe",
+      done: Boolean(profile.stripe_connected) || isDemoStripeConnected(),
+      action: "stripe",
+    },
+  ];
+  const pending = tasks.filter((task) => !task.done);
+  if (pending.length === 0) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="gs-head">
+      <h3>Getting started</h3>
+      <p class="meta">${pending.length} of ${tasks.length} steps left — finish these to start receiving bookings.</p>
+    </div>
+    <ul class="gs-list">
+      ${tasks
+        .map(
+          (task) => `
+        <li class="gs-item${task.done ? " is-done" : ""}">
+          <span class="gs-check" aria-hidden="true">${task.done ? "✓" : ""}</span>
+          <span class="gs-label">${escapeHtml(task.label)}</span>
+          ${
+            task.done
+              ? '<span class="gs-done">Done</span>'
+              : `<button class="btn btn-ghost btn-sm" type="button" data-gs-action="${task.action}">Go</button>`
+          }
+        </li>`
+        )
+        .join("")}
+    </ul>`;
+  box.querySelectorAll("[data-gs-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.gsAction;
+      if (action === "settings") {
+        activateTab("profile");
+        activateSettingsTab("public");
+      } else if (action === "packages") {
+        activateTab("packages");
+      } else if (action === "stripe") {
+        startOnboard();
+      }
+    });
+  });
 }
 
 /* ----------------------------- notifications ---------------------------- */
@@ -958,7 +1114,11 @@ function renderOverview() {
 function renderNotifications(data) {
   const list = document.getElementById("notif-list");
   if (!data.results || data.results.length === 0) {
-    list.innerHTML = '<p class="meta">No notifications yet.</p>';
+    list.innerHTML = emptyState({
+      icon: "bell",
+      title: "No notifications yet",
+      text: "Booking updates, new messages and payment confirmations will appear here.",
+    });
     return;
   }
   list.innerHTML = data.results
@@ -1189,7 +1349,7 @@ function detailNote(booking, isPhotographer) {
     return '<p class="detail-note">This request was rejected.</p>';
   }
   if (booking.status === "cancelled") {
-    return '<p class="detail-note">The deposit deadline passed, so the request was cancelled.</p>';
+    return '<p class="detail-note">This booking was cancelled.</p>';
   }
   return "";
 }
@@ -1220,23 +1380,35 @@ function renderRequestDetail(booking) {
       : null,
   ].filter(Boolean);
   let actions = "";
+  const canCancel = [
+    "requested",
+    "awaiting_payment",
+    "accepted",
+  ].includes(booking.status);
+  const cancelBtn = canCancel
+    ? `<button class="btn btn-ghost btn-sm btn-danger" type="button" data-detail-cancel="${booking.id}">Cancel Booking</button>`
+    : "";
   if (isPhotographer) {
     if (
       booking.status === "requested" ||
       booking.status === "awaiting_payment"
     ) {
       actions = `
-        <button class="btn btn-ghost btn-sm" type="button" data-detail-reject="${booking.id}">Reject</button>
-        <button class="btn btn-sm" type="button" data-detail-offer="${booking.id}">Customize Offer</button>
-        <button class="btn btn-ghost btn-sm" type="button" data-detail-cash="${booking.id}">Mark as Paid in Cash</button>`;
+        <button class="btn btn-ghost btn-sm btn-danger" type="button" data-detail-reject="${booking.id}">Reject</button>
+        <button class="btn btn-sm" type="button" data-detail-offer="${booking.id}" data-tip="Change the final price or details before sending the payment request.">Customize Offer</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-detail-cash="${booking.id}" data-tip="Use this if the client paid you outside the app. It bypasses Stripe.">Mark as Paid in Cash</button>
+        <p class="hint">Bypasses Stripe. Use only if paid outside the platform.</p>
+        ${cancelBtn}`;
     } else if (booking.status === "accepted") {
-      actions = `<button class="btn btn-sm" type="button" data-detail-complete="${booking.id}">Mark as Completed</button>`;
+      actions = `<button class="btn btn-sm" type="button" data-detail-complete="${booking.id}">Mark as Completed</button>${cancelBtn}`;
     }
   } else if (
     booking.status === "awaiting_payment" ||
     booking.status === "accepted"
   ) {
-    actions = payActionHtml(booking);
+    actions = payActionHtml(booking) + cancelBtn;
+  } else if (booking.status === "requested") {
+    actions = cancelBtn;
   }
   let reviewBlock = "";
   if (
@@ -1326,6 +1498,10 @@ function renderRequestDetail(booking) {
     completeButton.addEventListener("click", () =>
       confirmComplete(booking.id)
     );
+  }
+  const cancelButton = actionsBox.querySelector("[data-detail-cancel]");
+  if (cancelButton) {
+    cancelButton.addEventListener("click", () => openCancelModal(booking));
   }
   actionsBox.querySelectorAll("[data-pay]").forEach((button) => {
     button.addEventListener("click", () =>
@@ -1547,6 +1723,7 @@ function renderRequests(data, role) {
   renderOverview();
   updateStripeAlert();
   renderPaymentsSummary();
+  renderPaymentsTable();
 
   // Filter chips: keep counts and the active pill in sync.
   const allResults = data.results || [];
@@ -1554,6 +1731,7 @@ function renderRequests(data, role) {
     all: allResults.length,
     pending: allResults.filter(REQUEST_FILTERS.pending).length,
     accepted: allResults.filter(REQUEST_FILTERS.accepted).length,
+    cancelled: allResults.filter(REQUEST_FILTERS.cancelled).length,
   };
   document
     .querySelectorAll("#request-filters [data-filter]")
@@ -1574,7 +1752,22 @@ function renderRequests(data, role) {
   );
 
   if (allResults.length === 0) {
-    list.innerHTML = '<p class="meta">No booking requests yet.</p>';
+    list.innerHTML =
+      myRole === "photographer"
+        ? emptyState({
+            icon: "requests",
+            title: "No booking requests yet",
+            text: "New requests from clients will appear here so you can accept, counter-offer or reject them.",
+            action: "view-profile",
+            actionLabel: "See your public profile",
+          })
+        : emptyState({
+            icon: "requests",
+            title: "No booking requests yet",
+            text: "Find a photographer you like and send your first booking request.",
+            action: "browse",
+            actionLabel: "Explore Photographers",
+          });
   } else if (visible.length === 0) {
     list.innerHTML = '<p class="meta">No requests in this filter.</p>';
   } else {
@@ -1593,7 +1786,6 @@ function renderRequests(data, role) {
       });
     });
   }
-  customerPayActions();
 
   if (pendingOpenRequest) {
     const wanted = pendingOpenRequest;
@@ -1663,6 +1855,9 @@ async function refreshRequestView(id) {
   await loadRequests();
   if (myRole === "photographer") {
     await Promise.all([loadShoots(), loadClients(), loadGalleries()]);
+  } else {
+    // A cancelled booking must disappear from the client's galleries.
+    await loadGalleries();
   }
   await loadChat(id);
   await loadNotifications();
@@ -1699,7 +1894,7 @@ async function confirmComplete(id) {
 
 async function confirmReject(id) {
   const confirmed = window.confirm(
-    "Reject this booking request? The client will be notified."
+    "Are you sure you want to reject this booking? This action cannot be undone."
   );
   if (!confirmed) {
     return;
@@ -1709,6 +1904,106 @@ async function confirmReject(id) {
     showToast("Request rejected.");
     await refreshRequestView(id);
   }
+}
+
+/* Smart cancellation modal: the photographer always refunds in full;
+   the client follows the 7-day policy (>7 days: refundable, 7 or fewer:
+   the deposit is lost). Without a paid deposit there is no money at
+   risk, so the message stays generic. */
+function openCancelModal(booking) {
+  const depositCents = booking.deposit_cents;
+  const hasDeposit = depositCents !== null && depositCents !== undefined;
+  const amount = `$${(Number(depositCents || 0) / 100).toFixed(2)}`;
+  let message;
+  if (myRole === "photographer") {
+    message =
+      "Are you sure you want to cancel? Canceling as a photographer " +
+      "will issue a full refund to the client and release the date.";
+  } else if (!hasDeposit) {
+    message = "Are you sure you want to cancel this booking?";
+  } else if (booking.refundable) {
+    message =
+      `You are cancelling with enough time. Your deposit of ${amount} ` +
+      "will be fully refunded.";
+  } else {
+    message =
+      "Warning: You are cancelling less than 7 days before the session. " +
+      `According to the policy, your deposit is non-refundable. You will lose ${amount}.`;
+  }
+  let noticeText;
+  let noticeTone = "success";
+  if (myRole === "photographer") {
+    noticeText = hasDeposit
+      ? `The client will receive a full refund of ${amount} and the date is available again.`
+      : "The date is available again for new bookings.";
+  } else if (!hasDeposit) {
+    noticeText =
+      "No payment was collected for this booking, so nothing was charged.";
+  } else if (booking.refundable) {
+    noticeText =
+      `Your deposit of ${amount} has been refunded. ` +
+      "It will return to your original payment method.";
+  } else {
+    noticeTone = "warning";
+    noticeText =
+      `Your deposit of ${amount} was retained according to the ` +
+      "7-day cancellation policy.";
+  }
+  let modal = document.getElementById("cancel-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "cancel-modal";
+    modal.className = "modal";
+    modal.hidden = true;
+    modal.innerHTML = `
+      <div class="modal-panel">
+        <button class="modal-close" id="cancel-close" type="button" aria-label="Close">&times;</button>
+        <h3>Cancel Booking</h3>
+        <p class="modal-sub" id="cancel-message"></p>
+        <div class="form-actions">
+          <button class="btn btn-ghost" id="cancel-keep" type="button">Keep booking</button>
+          <button class="btn btn-danger" id="cancel-confirm" type="button">Cancel Booking</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const closeCancel = () => {
+      modal.hidden = true;
+      document.body.style.overflow = "";
+    };
+    modal.addEventListener("click", (event) => {
+      if (
+        event.target === modal ||
+        event.target.closest("#cancel-close") ||
+        event.target.closest("#cancel-keep")
+      ) {
+        closeCancel();
+      }
+    });
+    document
+      .getElementById("cancel-confirm")
+      .addEventListener("click", async () => {
+        const id = modal.dataset.booking;
+        const confirmBtn = document.getElementById("cancel-confirm");
+        confirmBtn.disabled = true;
+        const ok = await bookingAction(id, "cancel");
+        confirmBtn.disabled = false;
+        if (ok) {
+          closeCancel();
+          showNotice({
+            title: "Booking cancelled",
+            text: modal.dataset.notice,
+            tone: modal.dataset.noticeTone || "success",
+          });
+          await refreshRequestView(id);
+        }
+      });
+  }
+  modal.dataset.booking = String(booking.id);
+  modal.dataset.notice = noticeText;
+  modal.dataset.noticeTone = noticeTone;
+  document.getElementById("cancel-message").textContent = message;
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
 }
 
 function openOfferModal(booking) {
@@ -1725,6 +2020,7 @@ function openOfferModal(booking) {
         <p class="meta">Propose the final price for this request. The client sees the offer in the chat and by notification.</p>
         <label for="offer-price">Final price (USD)</label>
         <input id="offer-price" type="number" min="1" step="0.01" inputmode="decimal" />
+        <p class="hint">The 20% deposit will be requested to the client upon accepting this offer.</p>
         <div class="form-actions">
           <button class="btn btn-ghost" id="offer-cancel" type="button">Cancel</button>
           <button class="btn" id="offer-send" type="button">Send offer</button>
@@ -1820,7 +2116,13 @@ function renderShoots(data) {
   const list = document.getElementById("shoots-list");
   shootsForGallery = data.results || [];
   if (!data.results || data.results.length === 0) {
-    list.innerHTML = '<p class="meta">No shoots yet.</p>';
+    list.innerHTML = emptyState({
+      icon: "requests",
+      title: "No shoots yet",
+      text: "Accepted bookings show up here with their date, status and next step.",
+      action: "go-requests",
+      actionLabel: "View requests",
+    });
     return;
   }
   list.innerHTML = data.results
@@ -1938,13 +2240,25 @@ function renderGalleries(items) {
   const list = document.getElementById("galleries-list");
   galleriesForOverview = items;
   renderOverview();
+  renderPaymentsSummary();
+  renderPaymentsTable();
   if (items.length === 0) {
     list.innerHTML =
-      '<p class="meta">No galleries yet.' +
-      (myRole === "photographer"
-        ? " Create one from a shoot when it is ready."
-        : "") +
-      "</p>";
+      myRole === "photographer"
+        ? emptyState({
+            icon: "galleries",
+            title: "No galleries yet",
+            text: "Galleries are created from a shoot once it is ready. Your shared photos will appear here.",
+            action: "go-requests",
+            actionLabel: "View bookings",
+          })
+        : emptyState({
+            icon: "galleries",
+            title: "No galleries yet",
+            text: "Photos shared with you by your photographer will appear here.",
+            action: "browse",
+            actionLabel: "Find a photographer",
+          });
     return;
   }
   list.innerHTML = items
@@ -1968,7 +2282,6 @@ function renderGalleries(items) {
   list.querySelectorAll("[data-open-gallery]").forEach((button) => {
     button.addEventListener("click", () => openGallery(button.dataset.openGallery));
   });
-  customerPayActions();
 }
 
 async function loadGalleries() {
@@ -2459,7 +2772,7 @@ document.addEventListener("keydown", (event) => {
     document.getElementById("photo-modal").hidden = true;
     document.getElementById("collection-modal").hidden = true;
     document.getElementById("client-modal").hidden = true;
-    document.getElementById("review-modal").hidden = true;
+    document.getElementById("reply-modal").hidden = true;
   }
 });
 
@@ -2469,7 +2782,14 @@ function renderPackages(items) {
   catalogPackages = items;
   const list = document.getElementById("pkg-list");
   if (items.length === 0) {
-    list.innerHTML = '<p class="meta">No packages yet — add your first one.</p>';
+    list.innerHTML = emptyState({
+      icon: "packages",
+      title: "No packages yet",
+      text: "Create your first package to start receiving bookings.",
+      action: "add-package",
+      actionLabel: "+ Create Package",
+    });
+    renderGettingStarted();
     return;
   }
   list.innerHTML = items
@@ -2508,6 +2828,7 @@ function renderPackages(items) {
       }
     });
   });
+  renderGettingStarted();
 }
 
 function renderCollectionChips() {
@@ -2589,11 +2910,16 @@ function renderPortfolioItems(items) {
   });
   if (visible.length === 0) {
     portfolioPreviewPhotos = [];
-    list.innerHTML = `<p class="meta">${
+    list.innerHTML =
       items.length === 0
-        ? "No photos yet."
-        : "No photos in this collection yet."
-    }</p>`;
+        ? emptyState({
+            icon: "photos",
+            title: "No photos yet",
+            text: "Upload your best work so clients can see your style before they book.",
+            action: "add-photo",
+            actionLabel: "+ Add photo",
+          })
+        : '<p class="meta">No photos in this collection yet.</p>';
     return;
   }
   portfolioPreviewPhotos = visible;
@@ -2688,6 +3014,16 @@ function openPackageModal(packageId) {
   }
   document.getElementById("pkg-modal").hidden = false;
   document.getElementById("pkg-name").focus();
+}
+
+function openDeepLinkedPackage() {
+  if (!deepLinkPackageId) {
+    return;
+  }
+  if (catalogPackages.some((pkg) => pkg.id === deepLinkPackageId)) {
+    openPackageModal(deepLinkPackageId);
+    deepLinkPackageId = null;
+  }
 }
 
 document.getElementById("btn-add-package").addEventListener("click", () => {
@@ -3260,8 +3596,13 @@ async function loadClients() {
     }
     const list = document.getElementById("clients-list");
     if (items.length === 0) {
-      list.innerHTML =
-        '<p class="meta">No clients yet — they appear when you accept a booking.</p>';
+      list.innerHTML = emptyState({
+        icon: "clients",
+        title: "No clients yet",
+        text: "They will appear here when a booking is accepted, or you can add them manually.",
+        action: "add-client",
+        actionLabel: "+ Add Client manually",
+      });
       return;
     }
     list.innerHTML = `
@@ -3362,8 +3703,13 @@ async function loadFavorites() {
     renderOverview();
     const list = document.getElementById("favorites-list");
     if (items.length === 0) {
-      list.innerHTML =
-        '<p class="meta">No favorites yet — tap the star on your gallery photos.</p>';
+      list.innerHTML = emptyState({
+        icon: "star",
+        title: "No favorites yet",
+        text: "Tap the star on gallery photos to save them here for later.",
+        action: "browse",
+        actionLabel: "Explore Photographers",
+      });
       return;
     }
     list.innerHTML = items
@@ -3408,47 +3754,87 @@ async function loadFavorites() {
 function renderMyReviews(items) {
   reviewsForOverview = items;
   renderOverview();
-  if (myRole !== "customer") {
-    return;
-  }
   const list = document.getElementById("my-reviews-list");
+  const title = document.getElementById("my-reviews-title");
+  const tabBtn = document.querySelector('#dash-tabs .tab[data-tab="reviews"]');
+  const isCustomer = myRole === "customer";
+  const heading = isCustomer ? "My reviews" : "Reviews";
+  if (title) {
+    title.textContent = heading;
+  }
+  if (tabBtn) {
+    tabBtn.textContent = isCustomer ? "My reviews" : "Reviews";
+  }
+  const ownSlug = me && me.profile && me.profile.slug;
   if (items.length === 0) {
-    list.innerHTML =
-      '<p class="meta">You have not reviewed anyone yet — open a photographer profile to write one.</p>';
+    list.innerHTML = isCustomer
+      ? emptyState({
+          icon: "star",
+          title: "No reviews yet",
+          text: "After a session you can review the studio from their public profile.",
+          action: "browse",
+          actionLabel: "Explore Photographers",
+        })
+      : emptyState({
+          icon: "star",
+          title: "You don't have reviews yet",
+          text: "Here you will see reviews from people who have worked with you.",
+        });
     return;
   }
   list.innerHTML = items
-    .map(
-      (review) => `
+    .map((review) => {
+      const who = isCustomer
+        ? review.photographer_username
+        : review.customer_username;
+      const slug = isCustomer ? review.profile_slug : ownSlug;
+      const profileLink = slug
+        ? `<a class="btn btn-ghost btn-sm" href="profile.html?slug=${encodeURIComponent(
+            slug
+          )}">${isCustomer ? "View profile" : "See it on your profile"}</a>`
+        : "";
+      const replyBlock =
+        !isCustomer && review.reply
+          ? `<div class="review-reply">
+               <span class="meta">Your reply · ${formatDate(
+                 review.replied_at
+               )}</span>
+               <p class="req-msg">${escapeHtml(review.reply)}</p>
+             </div>`
+          : "";
+      const replyBtn =
+        !isCustomer && !review.reply
+          ? `<button class="btn btn-sm" type="button" data-reply-review="${review.id}">Reply</button>`
+          : "";
+      const deleteBtn = isCustomer
+        ? `<button class="btn btn-ghost btn-sm" type="button" data-del-review="${review.id}">Delete</button>`
+        : "";
+      return `
       <div class="request-row">
         <div class="req-info">
           <div class="review-head">
             ${starsHtml(review.rating)}
-            <strong>@${escapeHtml(review.photographer_username)}</strong>
+            <strong>@${escapeHtml(who)}</strong>
+            <span class="meta">${formatDate(review.created_at)}</span>
           </div>
           ${
             review.comment
               ? `<p class="req-msg">${escapeHtml(review.comment)}</p>`
               : ""
           }
-          <span class="meta">${formatDate(review.created_at)}</span>
+          ${replyBlock}
         </div>
-        <button class="btn btn-sm" type="button" data-edit-review="${
-          review.id
-        }">Edit</button>
-        <button class="btn btn-ghost btn-sm" type="button" data-del-review="${
-          review.id
-        }">Delete</button>
-      </div>`
-    )
+        ${replyBtn}${profileLink}${deleteBtn}
+      </div>`;
+    })
     .join("");
-  list.querySelectorAll("[data-edit-review]").forEach((button) => {
+  list.querySelectorAll("[data-reply-review]").forEach((button) => {
     button.addEventListener("click", () => {
       const review = items.find(
-        (item) => item.id === Number(button.dataset.editReview)
+        (item) => String(item.id) === String(button.dataset.replyReview)
       );
       if (review) {
-        openReviewModal(review);
+        openReplyModal(review);
       }
     });
   });
@@ -3481,49 +3867,53 @@ async function loadMyReviews() {
   }
 }
 
-function openReviewModal(review) {
-  editingReviewId = review.id;
-  document.getElementById("review-modal-title").textContent =
-    `Your review for @${review.photographer_username}`;
-  document.getElementById("review-error").hidden = true;
-  document.getElementById("review-rating").value = String(review.rating);
-  document.getElementById("review-comment").value = review.comment || "";
-  document.getElementById("review-modal").hidden = false;
-  document.getElementById("review-rating").focus();
+/* One public reply per review, posted from the dashboard. */
+function openReplyModal(review) {
+  const modal = document.getElementById("reply-modal");
+  if (!modal) {
+    return;
+  }
+  modal.dataset.review = String(review.id);
+  document.getElementById("reply-modal-title").textContent =
+    `Reply to @${review.customer_username}`;
+  document.getElementById("reply-error").hidden = true;
+  document.getElementById("reply-text").value = "";
+  modal.hidden = false;
+  document.getElementById("reply-text").focus();
 }
 
-document.getElementById("review-close").addEventListener("click", () => {
-  document.getElementById("review-modal").hidden = true;
+document.getElementById("reply-close").addEventListener("click", () => {
+  document.getElementById("reply-modal").hidden = true;
 });
-document.getElementById("review-modal").addEventListener("click", (event) => {
-  if (event.target.id === "review-modal") {
+document.getElementById("reply-modal").addEventListener("click", (event) => {
+  if (event.target.id === "reply-modal") {
     event.currentTarget.hidden = true;
   }
 });
-
-document.getElementById("review-form").addEventListener("submit", async (event) => {
+document.getElementById("reply-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const errorBox = document.getElementById("review-error");
+  const errorBox = document.getElementById("reply-error");
   errorBox.hidden = true;
-  if (!editingReviewId) {
+  const modal = document.getElementById("reply-modal");
+  const id = modal.dataset.review;
+  const text = document.getElementById("reply-text").value.trim();
+  if (!id || !text) {
+    errorBox.textContent = "Write a reply first.";
+    errorBox.hidden = false;
     return;
   }
   try {
-    const response = await apiFetch(`/reviews/${editingReviewId}/`, {
-      method: "PATCH",
-      body: {
-        rating: Number(document.getElementById("review-rating").value),
-        comment: document.getElementById("review-comment").value.trim(),
-      },
+    const response = await apiFetch(`/reviews/${id}/reply/`, {
+      method: "POST",
+      body: { reply: text },
     });
     if (!response.ok) {
       errorBox.textContent = await readError(response);
       errorBox.hidden = false;
       return;
     }
-    document.getElementById("review-modal").hidden = true;
-    editingReviewId = null;
-    showToast("Review updated.");
+    modal.hidden = true;
+    showToast("Reply posted.");
     loadMyReviews();
   } catch (error) {
     console.error(error);
@@ -3550,41 +3940,6 @@ const COUNTRIES = [
   ["CU", "Cuba"],
 ];
 
-function customerPayActions() {
-  const actions = document.getElementById("payments-actions");
-  if (myRole !== "customer") {
-    return;
-  }
-  const payable = bookingsForOverview.filter((booking) =>
-    ["awaiting_payment", "accepted"].includes(booking.status)
-  );
-  const rows = payable
-    .map(
-      (booking) => `
-      <div class="request-row">
-        <div class="req-info">
-          <strong>${escapeHtml(booking.package_title)}</strong>
-          <span class="meta">${formatDate(booking.date)}</span>
-        </div>
-        ${payActionHtml(booking)}
-      </div>`
-    )
-    .join("");
-  actions.innerHTML = rows
-    ? `<div class="setup-block">
-        <h3>Booking payments</h3>
-        <p class="meta">The deposit confirms your booking. The balance unlocks high-quality downloads.</p>
-        ${rows}
-      </div>`
-    : "";
-  actions.hidden = !rows;
-  actions.querySelectorAll("[data-pay]").forEach((button) => {
-    button.addEventListener("click", () =>
-      startPayment(button.dataset.pay, button.dataset.kind || "deposit")
-    );
-  });
-}
-
 function renderPaymentActions() {
   const actions = document.getElementById("payments-actions");
   if (myRole !== "photographer") {
@@ -3602,11 +3957,11 @@ function renderPaymentActions() {
       <div class="setup-block setup-connected">
         <div class="setup-connected-title">
           <span class="setup-check" aria-hidden="true">&#10003;</span>
-          Stripe Connected${demo ? " (Demo Mode)" : ""}
+          Stripe Connected${demo ? " (Test Mode)" : ""}
         </div>
         <p class="meta">${
           demo
-            ? "Simulated for this demo: payments settle inside Lumen."
+            ? "Test mode: no live charges are processed."
             : "Deposits go straight to your account."
         }</p>
         <a class="btn btn-sm" href="https://dashboard.stripe.com/test/payments" target="_blank" rel="noopener noreferrer">View Stripe Dashboard</a>
@@ -3635,67 +3990,205 @@ function renderPaymentActions() {
     });
 }
 
+function countPendingPayments() {
+  return bookingsForOverview.filter((booking) => {
+    if (!["awaiting_payment", "accepted"].includes(booking.status)) {
+      return false;
+    }
+    const pays = paymentsByBooking.get(booking.id) || {};
+    return !(pays.deposit && pays.deposit.status === "paid");
+  }).length;
+}
+
+/* Customer: what is still owed on this booking (total minus what was
+   paid). Fully paid (balance or cash) and cancelled bookings owe 0. */
+function customerBalanceDueCents(booking) {
+  if (!["accepted", "completed"].includes(booking.status)) {
+    return 0;
+  }
+  const pays = paymentsByBooking.get(booking.id) || {};
+  const depositPaid = Boolean(pays.deposit && pays.deposit.status === "paid");
+  const balancePaid = Boolean(pays.balance && pays.balance.status === "paid");
+  const cashPaid = Boolean(pays.cash && pays.cash.status === "paid");
+  if (cashPaid || balancePaid) {
+    return 0;
+  }
+  const totalCents = Math.round(Number(booking.effective_price || 0) * 100);
+  const paidCents = depositPaid ? Number(pays.deposit.amount_cents || 0) : 0;
+  return Math.max(0, totalCents - paidCents);
+}
+
+/* Rows for money that is not collected yet: the deposit before it is
+   paid, and the remaining balance once the deposit is in. */
+function customerFutureRows() {
+  const rows = [];
+  bookingsForOverview.forEach((booking) => {
+    const pays = paymentsByBooking.get(booking.id) || {};
+    const depositPaid = Boolean(pays.deposit && pays.deposit.status === "paid");
+    const cashPaid = Boolean(pays.cash && pays.cash.status === "paid");
+    const totalCents = Math.round(Number(booking.effective_price || 0) * 100);
+    if (booking.status === "awaiting_payment" && !depositPaid && !cashPaid) {
+      rows.push({
+        booking,
+        amountCents: Math.round(totalCents * 0.2),
+        label: "Deposit pending",
+      });
+      return;
+    }
+    const due = customerBalanceDueCents(booking);
+    if (due > 0) {
+      rows.push({
+        booking,
+        amountCents: due,
+        label: "Balance pending",
+      });
+    }
+  });
+  return rows;
+}
+
 function renderPaymentsSummary() {
   const box = document.getElementById("payments-summary");
   if (!box) {
     return;
   }
-  const paidCents = paymentsForOverview
-    .filter((payment) => payment.status === "paid")
-    .reduce((sum, payment) => sum + Number(payment.amount_cents || 0), 0);
-  const pendingCount = bookingsForOverview.filter((booking) => {
-    if (!["awaiting_payment", "accepted"].includes(booking.status)) {
-      return false;
-    }
-    const pays = paymentsByBooking.get(booking.id) || {};
-    const depositPaid =
-      pays.deposit && pays.deposit.status === "paid";
-    return !depositPaid;
-  }).length;
-  const totalLabel =
-    myRole === "photographer" ? "Total received" : "Total paid";
-  box.innerHTML = `
+  const pendingCount = countPendingPayments();
+  if (myRole === "photographer") {
+    const paidCents = paymentsForOverview
+      .filter((payment) => payment.status === "paid")
+      .reduce((sum, payment) => sum + Number(payment.amount_cents || 0), 0);
+    // Refunds (e.g. a cancelled booking) come out of the total received.
+    const refundedCents = paymentsForOverview
+      .filter((payment) => payment.status === "refunded")
+      .reduce((sum, payment) => sum + Number(payment.amount_cents || 0), 0);
+    const netCents = Math.max(0, paidCents - refundedCents);
+    box.innerHTML = `
     <span class="sum-chip ${
       pendingCount ? "sum-pending" : "sum-zero"
     }">Pending payments: ${pendingCount}</span>
     <span class="sum-chip ${
-      paidCents > 0 ? "sum-paid" : "sum-zero"
-    }">${totalLabel}: $${(paidCents / 100).toFixed(2)}</span>`;
-  const list = document.getElementById("payments-list");
-  if (list && paymentsForOverview.length === 0) {
-    list.innerHTML =
-      pendingCount > 0
-        ? `<p class="meta">${pendingCount} booking${
-            pendingCount === 1 ? " is" : "s are"
-          } waiting for payment.</p>`
-        : '<p class="meta">No payments yet.</p>';
-  }
-}
-
-function renderPayments(data) {
-  const list = document.getElementById("payments-list");
-  paymentsForOverview = data.results || [];
-  renderOverview();
-  paymentsByBooking = new Map();
-  for (const payment of data.results || []) {
-    const entry = paymentsByBooking.get(payment.booking) || {};
-    entry[payment.kind] = payment;
-    paymentsByBooking.set(payment.booking, entry);
-  }
-  renderPaymentsSummary();
-  customerPayActions();
-  if (!data.results || data.results.length === 0) {
+      netCents > 0 ? "sum-paid" : "sum-zero"
+    }">Total received: $${(netCents / 100).toFixed(2)}</span>`;
     return;
   }
-  // History table: the latest payments first (client, date, amount, status).
-  const latest = [...paymentsForOverview]
+  const depositPaidCents = paymentsForOverview
+    .filter(
+      (payment) => payment.status === "paid" && payment.kind === "deposit"
+    )
+    .reduce((sum, payment) => sum + Number(payment.amount_cents || 0), 0);
+  const refundedDepositCents = paymentsForOverview
+    .filter(
+      (payment) =>
+        payment.status === "refunded" && payment.kind === "deposit"
+    )
+    .reduce((sum, payment) => sum + Number(payment.amount_cents || 0), 0);
+  const netDepositCents = Math.max(0, depositPaidCents - refundedDepositCents);
+  const balanceDueCents = bookingsForOverview.reduce(
+    (sum, booking) => sum + customerBalanceDueCents(booking),
+    0
+  );
+  box.innerHTML = `
+    <span class="sum-chip ${
+      netDepositCents > 0 ? "sum-paid" : "sum-zero"
+    }">Deposit Paid: $${(netDepositCents / 100).toFixed(2)}</span>
+    <span class="sum-chip ${
+      balanceDueCents > 0 ? "sum-pending" : "sum-zero"
+    }">Balance Due: $${(balanceDueCents / 100).toFixed(2)}</span>
+    <span class="sum-chip ${
+      pendingCount ? "sum-pending" : "sum-zero"
+    }">Pending payments: ${pendingCount}</span>`;
+}
+
+function renderPaymentsTable() {
+  const list = document.getElementById("payments-list");
+  if (!list) {
+    return;
+  }
+  const pendingCount = countPendingPayments();
+  const futureRows = myRole === "customer" ? customerFutureRows() : [];
+  const payments = paymentsForOverview;
+  if (payments.length === 0 && futureRows.length === 0) {
+    const needsStripe =
+      myRole === "photographer" &&
+      !(me && me.profile && me.profile.stripe_connected) &&
+      !isDemoStripeConnected();
+    list.innerHTML =
+      pendingCount > 0
+        ? emptyState({
+            icon: "payments",
+            title: "Waiting for payment",
+            text: `${pendingCount} booking${
+              pendingCount === 1 ? " is" : "s are"
+            } waiting for you to pay the deposit.`,
+          })
+        : emptyState({
+            icon: "payments",
+            title: "No payments yet",
+            text:
+              myRole === "photographer"
+                ? "Deposits and balances paid by your clients will show up here."
+                : "Your deposits and remaining balances will show up here.",
+            action: needsStripe ? "connect-stripe" : null,
+            actionLabel: needsStripe ? "Connect Stripe" : null,
+          });
+    return;
+  }
+  const whoLabel = myRole === "photographer" ? "Client" : "Studio";
+  const latest = [...payments]
     .sort(
       (a, b) =>
         new Date(b.paid_at || b.created_at) -
         new Date(a.paid_at || a.created_at)
     )
     .slice(0, 10);
-  const whoLabel = myRole === "photographer" ? "Client" : "Studio";
+  const paymentRows = latest
+    .map((payment) => {
+      const who =
+        myRole === "photographer"
+          ? payment.customer_username
+          : payment.photographer_username;
+      const kindLabel =
+        payment.status === "refunded"
+          ? "Deposit refund"
+          : payment.kind === "balance"
+          ? "Balance (80%)"
+          : payment.kind === "cash"
+          ? "Cash payment"
+          : "Deposit (20%)";
+      return `
+      <tr data-highlight-id="${payment.id}">
+        <td>${escapeHtml(who || "-")}</td>
+        <td>${formatDate(payment.paid_at || payment.created_at)}</td>
+        <td>$${(Number(payment.amount_cents || 0) / 100).toFixed(2)}
+          <div class="meta">${kindLabel}</div>
+        </td>
+        <td>${statusChip(payment.status)}</td>
+      </tr>`;
+    })
+    .join("");
+  const futureHtml = futureRows
+    .map((row) => {
+      const booking = row.booking;
+      const studio =
+        booking.profile_studio_name || booking.profile_slug || "Studio";
+      let action = payActionHtml(booking);
+      if (booking.status === "completed") {
+        action = '<span class="status-chip status-pending">balance due</span>';
+      }
+      return `
+      <tr class="pay-upcoming">
+        <td>
+          <strong>${escapeHtml(studio)}</strong>
+          <div class="meta">${escapeHtml(booking.package_title || "")}</div>
+        </td>
+        <td><span class="meta">Upcoming</span></td>
+        <td>$${(row.amountCents / 100).toFixed(2)}
+          <div class="meta">${row.label}</div>
+        </td>
+        <td>${action}</td>
+      </tr>`;
+    })
+    .join("");
   list.innerHTML = `
     <table class="pay-table">
       <thead>
@@ -3707,28 +4200,29 @@ function renderPayments(data) {
         </tr>
       </thead>
       <tbody>
-        ${latest
-          .map((payment) => {
-            const who =
-              myRole === "photographer"
-                ? payment.customer_username
-                : payment.photographer_username;
-            return `
-          <tr data-highlight-id="${payment.id}">
-            <td>${escapeHtml(who || "-")}</td>
-            <td>${formatDate(payment.paid_at || payment.created_at)}</td>
-            <td>$${(Number(payment.amount_cents || 0) / 100).toFixed(2)}
-              <div class="meta">${
-                payment.kind === "balance" ? "Balance" : "Deposit"
-              }</div>
-            </td>
-            <td>${statusChip(payment.status)}</td>
-          </tr>`;
-          })
-          .join("")}
+        ${futureHtml}
+        ${paymentRows}
       </tbody>
     </table>`;
+  list.querySelectorAll("[data-pay]").forEach((button) => {
+    button.addEventListener("click", () =>
+      startPayment(button.dataset.pay, button.dataset.kind || "deposit")
+    );
+  });
   applyPendingHighlight(list, "payments");
+}
+
+function renderPayments(data) {
+  paymentsForOverview = data.results || [];
+  renderOverview();
+  paymentsByBooking = new Map();
+  for (const payment of data.results || []) {
+    const entry = paymentsByBooking.get(payment.booking) || {};
+    entry[payment.kind] = payment;
+    paymentsByBooking.set(payment.booking, entry);
+  }
+  renderPaymentsSummary();
+  renderPaymentsTable();
 }
 
 async function loadPayments() {
@@ -3833,6 +4327,14 @@ async function init() {
     ]);
   }
   finishPendingHighlight();
+  openDeepLinkedPackage();
+  showWelcomeOnce({
+    username: me.username,
+    role: myRole,
+    name:
+      (me.profile && me.profile.studio_name) || me.first_name || me.username,
+    onGo: myRole === "customer" ? () => activateTab("requests") : null,
+  });
 }
 
 initHeader();

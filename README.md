@@ -7,7 +7,7 @@ HTML/CSS/JS web frontend served by the same server.
 
 **Status**: backend complete (roadmap phases 1-4) + complete web frontend
 (catalog, profile with reviews, booking flow, role dashboard, galleries,
-payments), **322 tests passing**, local demo via `arrancar-demo.bat`.
+payments), **400 tests passing**.
 
 ## Features
 
@@ -49,8 +49,7 @@ python manage.py runserver
 ```
 
 Demo accounts (password `DemoLumen2026`): `demofoto` (photographer),
-`sofia.reyes` (customer). Open <http://127.0.0.1:8000/> for the web app
-(`arrancar-demo.bat` starts Daphne + Celery with one double-click).
+`sofia.reyes` (customer). Open <http://127.0.0.1:8000/> for the web app.
 
 Background tasks (thumbnails and emails) need Redis/Memurai running and a
 Celery worker in a second terminal (Windows requires the `solo` pool):
@@ -185,7 +184,7 @@ venv\Scripts\python.exe manage.py test
 ```
 
 Fully isolated: temporary media folder, eager Celery, in-memory channel layer,
-no network (no Redis, Cloudinary or Stripe needed). **322 tests** covering
+no network (no Redis, Cloudinary or Stripe needed). **400 tests** covering
 permissions, business rules, uploads, webhooks and plan limits.
 
 ## Database
@@ -216,6 +215,8 @@ See [docs/DEPLOY.md](docs/DEPLOY.md) for the step-by-step Railway guide
 (app + PostgreSQL + Redis + env vars + Stripe webhook). The `Procfile`
 runs Daphne (HTTP + WebSockets), migrations on release, and Celery in a
 second service.
+
+**Live demo**: <u>add your Railway URL here</u>
 
 ## Project structure
 

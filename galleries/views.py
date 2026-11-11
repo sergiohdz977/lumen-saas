@@ -8,6 +8,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from bookings.models import BookingRequest
 from notifications.services import notify
 from payments.services import booking_is_fully_paid
 from users.models import User
@@ -36,7 +37,11 @@ class GalleryViewSet(viewsets.ModelViewSet):
         if user.role == User.ROLE_PHOTOGRAPHER:
             qs = qs.filter(shoot__client__photographer=user)
         else:
-            qs = qs.filter(shoot__client__user=user)
+            # Cancelled bookings: the client loses access to the gallery
+            # immediately (the photographer keeps it).
+            qs = qs.filter(shoot__client__user=user).exclude(
+                shoot__booking__status="cancelled"
+            )
         if self.action == "list":
             shoot_id = self.request.query_params.get("shoot")
             if shoot_id:
@@ -76,6 +81,21 @@ def gallery_view(request, token):
         ),
         pk=gallery_id,
     )
+    booking = gallery.shoot.booking
+    if (
+        booking is not None
+        and booking.status == BookingRequest.Status.CANCELLED
+    ):
+        # Cancelled bookings: the client (and anyone with the link) loses
+        # access immediately; the photographer keeps it.
+        user = request.user
+        is_owner = (
+            user.is_authenticated
+            and user.role == User.ROLE_PHOTOGRAPHER
+            and gallery.shoot.client.photographer_id == user.pk
+        )
+        if not is_owner:
+            raise PermissionDenied("This gallery is no longer available")
     context = {"request": request}
     return Response(
         {
@@ -107,7 +127,11 @@ class PhotoViewSet(viewsets.ModelViewSet):
         if user.role == User.ROLE_PHOTOGRAPHER:
             qs = qs.filter(gallery__shoot__client__photographer=user)
         else:
-            qs = qs.filter(gallery__shoot__client__user=user)
+            # Cancelled bookings: the client loses access to the photos
+            # immediately (the photographer keeps it).
+            qs = qs.filter(gallery__shoot__client__user=user).exclude(
+                gallery__shoot__booking__status="cancelled"
+            )
         if self.action == "list":
             gallery_id = self.request.query_params.get("gallery")
             if gallery_id:
