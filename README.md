@@ -1,13 +1,19 @@
 # Lumen
 
+**Live app**: https://web-production-95133915.up.railway.app/
+
 A SaaS for photographers: marketplace, bookings, private galleries,
 reviews, real-time notifications and Stripe payments — with a free tier and a
 Pro subscription for photographers. Django REST backend plus a vanilla
 HTML/CSS/JS web frontend served by the same server.
 
-**Status**: backend complete (roadmap phases 1-4) + complete web frontend
-(catalog, profile with reviews, booking flow, role dashboard, galleries,
-payments), **416 tests passing**.
+**Status**: deployed on Railway (web + PostgreSQL + Redis) and fully working —
+**416 tests passing**. Demo photographers (password `DemoLumen2026`):
+`demofoto`, `elena.vargas`, `marco.ortiz`, `aisha.khan`.
+
+The demo runs with simulated payments (`STRIPE_DEMO_MODE=1`), so deposits
+and refunds need no card or Stripe account. API docs:
+<https://web-production-95133915.up.railway.app/api/docs/>
 
 ## Features
 
@@ -35,7 +41,7 @@ Django 6.1 · Django REST Framework · SimpleJWT · Channels · Celery ·
 PostgreSQL (SQLite in development) · Redis/Memurai · Cloudinary · Stripe ·
 drf-spectacular · Pillow · WhiteNoise
 
-## Quick start
+## Run locally (optional)
 
 ```bash
 git clone https://github.com/sergiohdz977/lumen-saas.git
@@ -221,7 +227,6 @@ Demo photographers (password `DemoLumen2026`): `demofoto`, `elena.vargas`,
 `marco.ortiz`, `aisha.khan`. `reset_demo --yes` wipes customers, bookings
 and reviews while keeping them.
 
-**Live demo**: https://web-production-95133915.up.railway.app/
 
 ## Project structure
 
