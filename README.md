@@ -216,7 +216,7 @@ See [docs/DEPLOY.md](docs/DEPLOY.md) for the step-by-step Railway guide
 runs Daphne (HTTP + WebSockets), migrations on release, and Celery in a
 second service.
 
-**Live demo**: <u>add your Railway URL here</u>
+**Live demo**: https://web-production-95133915.up.railway.app/
 
 ## Project structure
 
