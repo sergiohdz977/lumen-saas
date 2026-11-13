@@ -218,7 +218,21 @@ function showNotice({ title, text, tone = "success" } = {}) {
    business / country restrictions), so the frontend settles checkout
    through /api/payments/simulate/ with an in-app card form. The real
    flow only runs when this flag is false (payments/services.py -> start_checkout). */
-const STRIPE_DEMO_MODE = true;
+let STRIPE_DEMO_MODE = true;
+
+async function loadPaymentConfig() {
+  try {
+    const response = await fetch(`${API}/payments/config/`);
+    if (response.ok) {
+      const data = await response.json();
+      STRIPE_DEMO_MODE = data.demo_mode === true;
+    }
+  } catch (error) {
+    // Keep the safe demo fallback when the API is unavailable.
+    console.error(error);
+  }
+  return STRIPE_DEMO_MODE;
+}
 
 const CARD_DECLINES = {
   "4000000000000002": "Your card was declined.",

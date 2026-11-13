@@ -6,6 +6,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from bookings.models import BookingRequest
 from users.models import User
 from users.permissions import IsCustomer, IsPhotographer
@@ -13,6 +14,15 @@ from users.permissions import IsCustomer, IsPhotographer
 from . import providers, services
 from .models import Payment
 from .serializers import CheckoutSerializer, PaymentSerializer
+
+
+class PaymentConfigView(APIView):
+    """Public, non-sensitive payment flag used by the static frontend."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({"demo_mode": bool(settings.STRIPE_DEMO_MODE)})
 
 
 class PaymentViewSet(

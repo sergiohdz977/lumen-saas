@@ -33,7 +33,9 @@ class GalleryViewSet(viewsets.ModelViewSet):
             return Gallery.objects.none()
         qs = Gallery.objects.select_related(
             "shoot__client", "shoot__client__user", "shoot__booking"
-        ).annotate(photo_count=Count("photos"))
+        ).annotate(photo_count=Count("photos")).order_by(
+            "-created_at", "-id"
+        )
         if user.role == User.ROLE_PHOTOGRAPHER:
             qs = qs.filter(shoot__client__photographer=user)
         else:

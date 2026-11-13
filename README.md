@@ -1,5 +1,12 @@
 # Lumen
 
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Django](https://img.shields.io/badge/Django-6.1-092E20?logo=django&logoColor=white)](https://www.djangoproject.com/)
+[![JavaScript](https://img.shields.io/badge/JavaScript-Vanilla-F7DF1E?logo=javascript&logoColor=111827)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-Ready-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?logo=stripe&logoColor=white)](https://stripe.com/connect)
+
 **Live app**: https://web-production-95133915.up.railway.app/
 
 A SaaS for photographers: marketplace, bookings, private galleries,
@@ -7,8 +14,8 @@ reviews, real-time notifications and Stripe payments — with a free tier and a
 Pro subscription for photographers. Django REST backend plus a vanilla
 HTML/CSS/JS web frontend served by the same server.
 
-**Status**: deployed on Railway (web + PostgreSQL + Redis) and fully working —
-**416 tests passing**. Demo photographers (password `DemoLumen2026`):
+**Status**: deployed on Railway (web + PostgreSQL + Redis) and maintained with a
+full automated test suite. Demo photographers (password `DemoLumen2026`):
 `demofoto`, `elena.vargas`, `marco.ortiz`, `aisha.khan`.
 
 The demo runs with simulated payments (`STRIPE_DEMO_MODE=1`), so deposits
@@ -43,6 +50,9 @@ drf-spectacular · Pillow · WhiteNoise
 
 ## Run locally (optional)
 
+For the complete architecture, quality gates and operational notes, see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 ```bash
 git clone https://github.com/sergiohdz977/lumen-saas.git
 cd lumen-saas
@@ -54,8 +64,9 @@ python manage.py seed_demo      # demo accounts, packages and photos
 python manage.py runserver
 ```
 
-Demo accounts (password `DemoLumen2026`): `demofoto` (photographer),
-`sofia.reyes` (customer). Open <http://127.0.0.1:8000/> for the web app.
+Demo accounts (password `DemoLumen2026`): `demofoto`, `elena.vargas`,
+`marco.ortiz`, `aisha.khan` (photographers) and `sofia.reyes` (customer).
+Open <http://127.0.0.1:8000/> for the web app.
 
 Background tasks (thumbnails and emails) need Redis/Memurai running and a
 Celery worker in a second terminal (Windows requires the `solo` pool):
@@ -245,4 +256,6 @@ frontend/      web app: index, profile, dashboard (vanilla HTML/CSS/JS)
 docs/          DEPLOY.md, CHANGELOG.md, api-schema.yml
 ```
 
-See [AGENTS-1.md](AGENTS-1.md) for the roadmap and conventions.
+See [AGENTS-1.md](AGENTS-1.md) for the roadmap and conventions. The project
+architecture and maintenance checklist are in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).

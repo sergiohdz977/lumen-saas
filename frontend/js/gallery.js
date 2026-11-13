@@ -368,22 +368,33 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-document.getElementById("g-banner-action").addEventListener("click", (event) => {
-  // SIMULACIÓN FRONTEND: El flujo real crea una Checkout Session en Django (start_checkout) y redirige a Stripe. Aquí simulamos el pago para la demo.
-  if (!STRIPE_DEMO_MODE || !galleryInfo || !galleryInfo.booking_id) {
+document.getElementById("g-banner-action").addEventListener("click", async (event) => {
+  if (!galleryInfo || !galleryInfo.booking_id) {
     return;
   }
   event.preventDefault();
   const awaitingDeposit = galleryInfo.booking_status === "awaiting_payment";
-  openSimulatedCheckout(
-    galleryInfo.booking_id,
-    awaitingDeposit ? "deposit" : "balance",
-    { title: document.getElementById("g-title").textContent }
-  );
+  const kind = awaitingDeposit ? "deposit" : "balance";
+  if (STRIPE_DEMO_MODE) {
+    openSimulatedCheckout(galleryInfo.booking_id, kind, {
+      title: document.getElementById("g-title").textContent,
+    });
+    return;
+  }
+  const response = await apiFetch("/payments/checkout/", {
+    method: "POST",
+    body: { booking: Number(galleryInfo.booking_id), kind },
+  });
+  if (!response.ok) {
+    showToast(await readError(response));
+    return;
+  }
+  const data = await response.json();
+  window.location.href = data.checkout_url;
 });
 
 initHeader();
-loadMe().then(() => {
+loadPaymentConfig().then(() => loadMe()).then(() => {
   renderGrid();
   renderBanner();
   loadFavorites();

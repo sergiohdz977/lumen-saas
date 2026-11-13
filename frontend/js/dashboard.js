@@ -4372,6 +4372,7 @@ document
   });
 
 async function init() {
+  await loadPaymentConfig();
   if (!getAccess()) {
     showGate();
     return;
