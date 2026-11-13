@@ -286,6 +286,54 @@ class LoginAndRefreshTests(TestCase):
         self.assertNotIn("password", response.data)
 
 
+class AccountRecoveryTests(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.user = User.objects.create_user(
+            username="recoverme",
+            email="recoverme@test.com",
+            password="secret123",
+        )
+
+    def test_recovery_response_is_generic_for_known_and_unknown_email(self):
+        known = self.api.post(
+            "/api/auth/recover/",
+            {"email": "recoverme@test.com", "action": "username"},
+            format="json",
+        )
+        unknown = self.api.post(
+            "/api/auth/recover/",
+            {"email": "nobody@test.com", "action": "username"},
+            format="json",
+        )
+        self.assertEqual(known.status_code, 200)
+        self.assertEqual(known.data, unknown.data)
+
+    def test_password_reset_token_updates_password(self):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
+
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        token = default_token_generator.make_token(self.user)
+        response = self.api.post(
+            "/api/auth/reset-password/",
+            {"uid": uid, "token": token, "new_password": "new-secret-456"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("new-secret-456"))
+
+    def test_invalid_password_reset_token_is_rejected(self):
+        response = self.api.post(
+            "/api/auth/reset-password/",
+            {"uid": "bad", "token": "bad", "new_password": "new-secret-456"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+
 class RegisterRoleAuditTests(TestCase):
     def setUp(self):
         self.api = APIClient()

@@ -18,6 +18,16 @@ const loginClose = document.getElementById("login-close");
 const loginError = document.getElementById("login-error");
 const registerError = document.getElementById("register-error");
 const languageSelect = document.getElementById("language-select");
+const recoveryForm = document.getElementById("recovery-form");
+const recoveryError = document.getElementById("recovery-error");
+const recoveryTitle = document.getElementById("recovery-title");
+const recoverySubtitle = document.getElementById("recovery-subtitle");
+const recoverySubmit = document.getElementById("recovery-submit");
+const resetForm = document.getElementById("reset-form");
+const resetError = document.getElementById("reset-error");
+const resetPassword = document.getElementById("reset-password");
+let recoveryAction = "password";
+let resetCredentials = null;
 
 const translations = {
   en: {
@@ -173,6 +183,30 @@ function switchAuthTab(tab) {
   });
 }
 
+function openRecovery(action) {
+  recoveryAction = action;
+  recoveryError.hidden = true;
+  recoveryError.className = "form-error";
+  recoveryForm.reset();
+  recoveryTitle.textContent = action === "username" ? "Recover your username" : "Reset your password";
+  recoverySubtitle.textContent = action === "username"
+    ? "We will send your username to the email linked to your account."
+    : "We will send a secure reset link to the email linked to your account.";
+  recoverySubmit.textContent = action === "username" ? "Send username" : "Send reset link";
+  switchAuthTab("recovery");
+  loginModal.hidden = false;
+  document.getElementById("recovery-email").focus();
+}
+
+function openReset(uid, token) {
+  resetCredentials = { uid, token };
+  resetError.hidden = true;
+  resetForm.reset();
+  switchAuthTab("reset");
+  loginModal.hidden = false;
+  resetPassword.focus();
+}
+
 function openAuth(tab = "login") {
   loginError.hidden = true;
   registerError.hidden = true;
@@ -313,6 +347,56 @@ async function handleRegister(event) {
   }
 }
 
+async function handleRecovery(event) {
+  event.preventDefault();
+  recoveryError.hidden = true;
+  try {
+    const response = await fetch(`${API}/auth/recover/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: document.getElementById("recovery-email").value.trim(),
+        action: recoveryAction,
+      }),
+    });
+    if (!response.ok) {
+      recoveryError.textContent = await readError(response);
+      recoveryError.hidden = false;
+      return;
+    }
+    recoveryError.className = "form-success";
+    recoveryError.textContent = "If an account matches that email, instructions have been sent.";
+    recoveryError.hidden = false;
+  } catch (error) {
+    recoveryError.className = "form-error";
+    recoveryError.textContent = "Could not reach the API. Is the server running?";
+    recoveryError.hidden = false;
+  }
+}
+
+async function handleReset(event) {
+  event.preventDefault();
+  resetError.hidden = true;
+  try {
+    const response = await fetch(`${API}/auth/reset-password/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...resetCredentials, new_password: resetPassword.value }),
+    });
+    if (!response.ok) {
+      resetError.textContent = await readError(response);
+      resetError.hidden = false;
+      return;
+    }
+    closeAuth();
+    openAuth("login");
+    showToast("Password updated. You can now log in.");
+  } catch (error) {
+    resetError.textContent = "Could not reach the API. Is the server running?";
+    resetError.hidden = false;
+  }
+}
+
 const header = initHeader({
   onLogin: () => openAuth("login"),
   onSignup: () => openAuth("register"),
@@ -329,6 +413,11 @@ document.querySelectorAll(".modal-tab").forEach((button) => {
 });
 loginForm.addEventListener("submit", handleLogin);
 registerForm.addEventListener("submit", handleRegister);
+recoveryForm.addEventListener("submit", handleRecovery);
+resetForm.addEventListener("submit", handleReset);
+document.getElementById("forgot-password").addEventListener("click", () => openRecovery("password"));
+document.getElementById("forgot-username").addEventListener("click", () => openRecovery("username"));
+document.getElementById("recovery-back").addEventListener("click", () => openAuth("login"));
 
 searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -385,7 +474,11 @@ verifyToken();
 loadPage(listUrl());
 
 const auto = new URLSearchParams(window.location.search);
-if (!isLoggedIn() && auto.get("register") === "1") {
+const resetParam = auto.get("reset");
+if (resetParam && resetParam.includes(":")) {
+  const [uid, token] = resetParam.split(":");
+  openReset(uid, token);
+} else if (!isLoggedIn() && auto.get("register") === "1") {
   openAuth("register");
   history.replaceState(null, "", "index.html");
 } else if (!isLoggedIn() && auto.get("login") === "1") {

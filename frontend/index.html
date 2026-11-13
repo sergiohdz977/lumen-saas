@@ -10,7 +10,7 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="css/styles.css?v=64" />
+  <link rel="stylesheet" href="css/styles.css?v=65" />
 </head>
 <body>
   <header class="site-header">
@@ -180,6 +180,10 @@
           <input id="login-password" name="password" type="password" autocomplete="current-password" required />
           <p id="login-error" class="form-error" hidden></p>
           <button class="btn btn-block" type="submit" data-i18n="auth.login">Log in</button>
+          <div class="auth-help-links">
+            <button type="button" class="text-button" id="forgot-password">Forgot password?</button>
+            <button type="button" class="text-button" id="forgot-username">Forgot username?</button>
+          </div>
         </form>
       </div>
 
@@ -203,10 +207,34 @@
           <button class="btn btn-block" type="submit" data-i18n="auth.createButton">Create account</button>
         </form>
       </div>
+
+      <div data-auth-panel="recovery" hidden>
+        <button type="button" class="back-auth" id="recovery-back">← Back to login</button>
+        <h2 id="recovery-title">Recover your account</h2>
+        <p class="modal-sub" id="recovery-subtitle">Enter the email associated with your Lumen account.</p>
+        <form id="recovery-form">
+          <label for="recovery-email">Email</label>
+          <input id="recovery-email" type="email" autocomplete="email" required />
+          <p id="recovery-error" class="form-error" hidden></p>
+          <button class="btn btn-block" type="submit" id="recovery-submit">Send instructions</button>
+        </form>
+      </div>
+
+      <div data-auth-panel="reset" hidden>
+        <h2>Choose a new password</h2>
+        <p class="modal-sub">Use a strong password you have not used elsewhere.</p>
+        <form id="reset-form">
+          <label for="reset-password">New password</label>
+          <input id="reset-password" type="password" autocomplete="new-password" minlength="8" required />
+          <p class="form-hint">At least 8 characters.</p>
+          <p id="reset-error" class="form-error" hidden></p>
+          <button class="btn btn-block" type="submit">Update password</button>
+        </form>
+      </div>
     </div>
   </div>
 
-  <script src="js/common.js?v=64"></script>
-  <script src="js/app.js?v=64"></script>
+  <script src="js/common.js?v=65"></script>
+  <script src="js/app.js?v=65"></script>
 </body>
 </html>

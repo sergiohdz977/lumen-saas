@@ -294,10 +294,17 @@ if CLOUDINARY_CLOUD_NAME and "test" not in sys.argv:
     )
 
 
-# Email: console backend prints messages to the terminal in development.
-# Django automatically switches to the locmem backend during tests (mail.outbox).
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-DEFAULT_FROM_EMAIL = "Lumen <no-reply@lumen.local>"
+# Email: console backend is a safe local fallback. Configure SMTP_* on Railway
+# to deliver username and password-recovery messages to real inboxes.
+EMAIL_BACKEND = _env(
+    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+)
+EMAIL_HOST = _env("EMAIL_HOST")
+EMAIL_PORT = int(_env("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = _env("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = _env("EMAIL_HOST_PASSWORD")
+EMAIL_USE_TLS = _env("EMAIL_USE_TLS", "1") == "1"
+DEFAULT_FROM_EMAIL = _env("DEFAULT_FROM_EMAIL", "Lumen <no-reply@lumen.local>")
 SITE_URL = os.getenv("SITE_URL", "http://127.0.0.1:8000")
 
 REST_FRAMEWORK = {
@@ -338,4 +345,3 @@ if not DEBUG and "test" not in sys.argv:
     # Optional extras, enabled with env flags per host.
     SECURE_SSL_REDIRECT = os.getenv("DJANGO_SSL_REDIRECT", "0") == "1"
     SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_HSTS_SECONDS", "0"))
-

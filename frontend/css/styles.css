@@ -3740,3 +3740,42 @@ body {
 }
 
 @keyframes menu-in { from { opacity: 0; transform: translateY(-7px) scale(.98); } to { opacity: 1; transform: none; } }
+
+
+/* Account recovery and profile presentation */
+.auth-help-links { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: 15px; }
+.text-button, .back-auth { padding: 0; border: 0; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-size: .78rem; }
+.text-button:hover, .back-auth:hover { color: var(--accent-strong); text-decoration: underline; }
+.back-auth { margin-bottom: 18px; }
+.form-success { margin: 12px 0 0; color: #2f9d79; font-size: .85rem; line-height: 1.5; }
+
+.profile-hero {
+  position: relative;
+  overflow: hidden;
+  min-height: 280px;
+  padding: 0;
+  border-radius: 24px;
+  background: var(--panel);
+  box-shadow: 0 18px 44px rgba(25,45,63,.10);
+}
+.profile-hero.has-cover { padding-top: 150px; }
+.cover-banner { position: absolute; inset: 0 0 auto; height: 190px; overflow: hidden; background: linear-gradient(135deg, #cce8e2, #e8c2b3); }
+.cover-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15,29,35,.04), rgba(15,29,35,.62)); }
+.cover-banner img { width: 100%; height: 100%; object-fit: cover; }
+.profile-top { position: relative; z-index: 1; align-items: center; gap: 22px; padding: 28px; }
+.profile-hero.has-cover .profile-top { align-items: flex-end; padding-top: 0; }
+.avatar-lg { flex: 0 0 auto; width: 142px; height: 142px; border: 6px solid var(--panel); font-size: 3.4rem; box-shadow: 0 14px 30px rgba(25,45,63,.2); }
+.avatar-lg .avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.profile-headings h1 { font-size: clamp(1.8rem, 4vw, 2.7rem); letter-spacing: -.055em; }
+.profile-headings .meta { font-size: .92rem; }
+.profile-hero > #p-phone { position: relative; z-index: 1; margin: -12px 28px 0 192px; padding-bottom: 25px; }
+
+@media (max-width: 600px) {
+  .profile-hero { min-height: 0; }
+  .profile-hero.has-cover { padding-top: 112px; }
+  .cover-banner { height: 156px; }
+  .profile-top, .profile-hero.has-cover .profile-top { display: block; padding: 20px; }
+  .avatar-lg { width: 112px; height: 112px; margin-bottom: 16px; }
+  .profile-headings h1 { font-size: 1.8rem; }
+  .profile-hero > #p-phone { margin: -4px 20px 0; padding-bottom: 20px; }
+}
