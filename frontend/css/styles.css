@@ -3681,3 +3681,62 @@ body {
   .lb-close { top: 78px; right: 18px; width: 44px; height: 44px; }
   .lb-caption { max-width: 70vw; margin-top: 10px; font-size: .78rem; }
 }
+
+
+/* Mobile product navigation */
+.header-inner { position: relative; }
+.mobile-menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  width: 42px;
+  height: 42px;
+  margin-left: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 7px 18px rgba(25,45,63,.08);
+}
+.mobile-menu-toggle span { display: block; width: 17px; height: 2px; border-radius: 999px; background: currentColor; transition: transform .22s ease, opacity .22s ease; }
+.mobile-menu-toggle[aria-expanded="true"] span:first-child { transform: translateY(6px) rotate(45deg); }
+.mobile-menu-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+.mobile-menu-toggle[aria-expanded="true"] span:last-child { transform: translateY(-6px) rotate(-45deg); }
+
+@media (max-width: 720px) {
+  .site-header { z-index: 40; }
+  .header-inner { min-height: 64px; height: auto; padding: 10px 20px; align-items: center; }
+  .logo { font-size: 1.18rem; }
+  .mobile-menu-toggle { display: inline-flex; }
+  .nav {
+    position: absolute;
+    top: calc(100% + 9px);
+    left: 14px;
+    right: 14px;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(255,255,255,.96);
+    box-shadow: 0 22px 50px rgba(25,45,63,.17);
+    backdrop-filter: blur(18px);
+  }
+  .nav.is-open { display: flex; animation: menu-in .22s var(--ease-out); }
+  .nav a { display: flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 11px; font-size: .92rem; }
+  .nav a:hover, .nav a:focus-visible { background: var(--panel-2); }
+  .nav #auth-area { display: flex; flex-direction: column; gap: 7px; padding: 8px 4px 4px; border-top: 1px solid var(--line); }
+  .nav #auth-area .btn { width: 100%; min-height: 44px; }
+  .nav #auth-user { display: flex; flex-direction: column; gap: 7px; }
+  .nav #auth-user .auth-greeting { display: block; margin: 0; padding: 4px 10px; font-size: .8rem; }
+  .language-switcher { position: absolute; top: 16px; right: 72px; z-index: 2; }
+  .site-header .header-inner { padding-right: 20px; }
+  .hero { padding-top: 54px; }
+}
+
+@keyframes menu-in { from { opacity: 0; transform: translateY(-7px) scale(.98); } to { opacity: 1; transform: none; } }
