@@ -10,7 +10,7 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="css/styles.css?v=60" />
+  <link rel="stylesheet" href="css/styles.css?v=61" />
 </head>
 <body>
   <header class="site-header">
@@ -51,13 +51,68 @@
   </header>
 
   <main class="container">
-    <section class="hero">
-      <p class="hero-kicker">Photography booking platform</p>
-      <h1>Find the photographer for your next story</h1>
-      <p class="hero-sub">Browse studios, explore their specialties and book in minutes.</p>
+    <section class="hero reveal">
+      <div class="hero-copy">
+        <p class="hero-kicker"><span class="status-dot" aria-hidden="true"></span> Photography booking platform</p>
+        <h1>Find the photographer for your <em>next story</em></h1>
+        <p class="hero-sub">Browse studios, explore their specialties and book in minutes. A more considered way to find the right eye for every occasion.</p>
+        <div class="hero-actions">
+          <a class="btn hero-cta" href="#photographers">Explore photographers <span aria-hidden="true">↗</span></a>
+          <span class="hero-note"><span class="hero-note-mark">✦</span> Curated for memorable moments</span>
+        </div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="hero-art-glow hero-art-glow--one"></div>
+        <div class="hero-art-glow hero-art-glow--two"></div>
+        <div class="hero-frame hero-frame--back"></div>
+        <div class="hero-frame hero-frame--front">
+          <div class="hero-frame-top"><span>01 / 04</span><span>LU</span></div>
+          <div class="hero-frame-scene"><span class="scene-sun"></span><span class="scene-horizon"></span><span class="scene-figure"></span></div>
+          <div class="hero-frame-bottom"><strong>Light finds a way</strong><span>Editorial portrait</span></div>
+        </div>
+        <span class="hero-orbit hero-orbit--one"></span>
+        <span class="hero-orbit hero-orbit--two"></span>
+      </div>
     </section>
 
-    <section id="photographers">
+    <section class="trust-strip reveal" aria-label="Lumen benefits">
+      <div class="trust-item"><strong>01</strong><span>Discover with intention</span></div>
+      <div class="trust-item"><strong>02</strong><span>Compare the details</span></div>
+      <div class="trust-item"><strong>03</strong><span>Book with confidence</span></div>
+      <p class="trust-caption">Your next chapter, beautifully framed.</p>
+    </section>
+
+    <section class="how-it-works reveal" aria-labelledby="how-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">A simpler way to begin</p>
+          <h2 id="how-title">Your perfect session,<br /><em>in three thoughtful steps.</em></h2>
+        </div>
+        <p class="section-heading-copy">Lumen brings the right details forward so choosing a photographer feels as natural as the story you want to tell.</p>
+      </div>
+      <div class="guide-grid">
+        <article class="guide-card guide-card--mint">
+          <div class="guide-top"><span class="guide-number">01</span><span class="guide-icon" aria-hidden="true">⌕</span></div>
+          <div class="guide-illustration guide-illustration--search" aria-hidden="true"><span class="guide-sun"></span><span class="guide-line guide-line--one"></span><span class="guide-line guide-line--two"></span><span class="guide-lens"></span></div>
+          <h3>Discover your match</h3>
+          <p>Search by city, specialty and style to find a photographer who sees things your way.</p>
+        </article>
+        <article class="guide-card guide-card--warm">
+          <div class="guide-top"><span class="guide-number">02</span><span class="guide-icon" aria-hidden="true">✦</span></div>
+          <div class="guide-illustration guide-illustration--compare" aria-hidden="true"><span class="guide-profile guide-profile--one"></span><span class="guide-profile guide-profile--two"></span><span class="guide-star">✦</span></div>
+          <h3>See the feeling</h3>
+          <p>Explore portfolios, packages and reviews before you choose the energy that fits.</p>
+        </article>
+        <article class="guide-card guide-card--blue">
+          <div class="guide-top"><span class="guide-number">03</span><span class="guide-icon" aria-hidden="true">↗</span></div>
+          <div class="guide-illustration guide-illustration--book" aria-hidden="true"><span class="guide-calendar"><i></i><i></i><i></i><i></i></span><span class="guide-check">✓</span></div>
+          <h3>Make it yours</h3>
+          <p>Send a request, secure your date and keep every important detail in one place.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="photographers" class="reveal">
       <form id="search-form" class="search-bar" role="search">
         <label class="sr-only" for="search-city">City</label>
         <input id="search-city" type="search" placeholder="City — e.g. Madrid" />
@@ -143,7 +198,7 @@
     </div>
   </div>
 
-  <script src="js/common.js?v=60"></script>
-  <script src="js/app.js?v=60"></script>
+  <script src="js/common.js?v=61"></script>
+  <script src="js/app.js?v=61"></script>
 </body>
 </html>
