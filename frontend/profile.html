@@ -10,7 +10,7 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="css/styles.css?v=62" />
+  <link rel="stylesheet" href="css/styles.css?v=63" />
 </head>
 <body>
   <header class="site-header">
@@ -166,9 +166,18 @@
 
   <div class="lightbox" id="lightbox" hidden>
     <button class="lb-btn lb-close" id="lb-close" aria-label="Close">✕</button>
+    <div class="lb-topbar">
+      <span class="lb-hint" id="lb-hint">Tap, pinch or double-click to zoom</span>
+      <div class="lb-tools" aria-label="Image zoom controls">
+        <button class="lb-tool" id="lb-zoom-out" type="button" aria-label="Zoom out">−</button>
+        <span class="lb-zoom-level" id="lb-zoom-level">100%</span>
+        <button class="lb-tool" id="lb-zoom-in" type="button" aria-label="Zoom in">+</button>
+        <button class="lb-reset" id="lb-zoom-reset" type="button">Reset</button>
+      </div>
+    </div>
     <button class="lb-btn lb-prev" id="lb-prev" aria-label="Previous photo">‹</button>
-    <figure class="lb-stage">
-      <img id="lb-img" alt="" />
+    <figure class="lb-stage" id="lb-stage">
+      <img id="lb-img" alt="" draggable="false" />
       <figcaption class="lb-caption" id="lb-caption"></figcaption>
     </figure>
     <button class="lb-btn lb-next" id="lb-next" aria-label="Next photo">›</button>
@@ -197,7 +206,7 @@
     </div>
   </div>
 
-  <script src="js/common.js?v=62"></script>
-  <script src="js/profile.js?v=62"></script>
+  <script src="js/common.js?v=63"></script>
+  <script src="js/profile.js?v=63"></script>
 </body>
 </html>

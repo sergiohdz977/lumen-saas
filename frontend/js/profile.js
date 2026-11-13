@@ -5,8 +5,13 @@ const statusEl = document.getElementById("profile-status");
 const view = document.getElementById("profile-view");
 const lightbox = document.getElementById("lightbox");
 const lbImg = document.getElementById("lb-img");
+const lbStage = document.getElementById("lb-stage");
 const lbCaption = document.getElementById("lb-caption");
 const lbCounter = document.getElementById("lb-counter");
+const lbZoomIn = document.getElementById("lb-zoom-in");
+const lbZoomOut = document.getElementById("lb-zoom-out");
+const lbZoomReset = document.getElementById("lb-zoom-reset");
+const lbZoomLevel = document.getElementById("lb-zoom-level");
 const portfolioGrid = document.getElementById("portfolio-grid");
 const bookModal = document.getElementById("book-modal");
 const bookForm = document.getElementById("book-form");
@@ -29,6 +34,13 @@ const reviewsList = document.getElementById("reviews-list");
 
 let portfolioPhotos = [];
 let lbIndex = 0;
+let lbScale = 1;
+let lbPanX = 0;
+let lbPanY = 0;
+const lbPointers = new Map();
+let lbPinchStartDistance = 0;
+let lbPinchStartScale = 1;
+let lbDragStart = null;
 let myRole = null;
 let myId = null;
 let photographerId = null;
@@ -232,6 +244,7 @@ async function loadPortfolio() {
         <img src="${escapeHtml(photo.image)}" alt="${escapeHtml(
               photo.caption || "Portfolio photo"
             )}" loading="lazy" />
+        <span class="photo-open-hint">Open full screen <b aria-hidden="true">↗</b></span>
         ${
           photo.caption
             ? `<figcaption class="photo-caption">${escapeHtml(
@@ -415,12 +428,41 @@ async function loadMe() {
   }
 }
 
+function applyLightboxTransform() {
+  lbImg.style.transform = `translate3d(${lbPanX}px, ${lbPanY}px, 0) scale(${lbScale})`;
+  lbZoomLevel.textContent = `${Math.round(lbScale * 100)}%`;
+  lbImg.classList.toggle("is-zoomed", lbScale > 1);
+}
+
+function setLightboxZoom(nextScale) {
+  lbScale = Math.min(4, Math.max(1, nextScale));
+  if (lbScale === 1) {
+    lbPanX = 0;
+    lbPanY = 0;
+  }
+  applyLightboxTransform();
+}
+
+function resetLightboxZoom() {
+  lbScale = 1;
+  lbPanX = 0;
+  lbPanY = 0;
+  applyLightboxTransform();
+}
+
+function pointerDistance() {
+  const points = [...lbPointers.values()];
+  if (points.length < 2) return 0;
+  return Math.hypot(points[0].clientX - points[1].clientX, points[0].clientY - points[1].clientY);
+}
+
 function renderLightbox() {
   const photo = portfolioPhotos[lbIndex];
   lbImg.src = photo.image;
   lbImg.alt = photo.caption || "Portfolio photo";
   lbCaption.textContent = photo.caption || "";
   lbCounter.textContent = `${lbIndex + 1} / ${portfolioPhotos.length}`;
+  resetLightboxZoom();
 }
 
 function openLightbox(index) {
@@ -458,6 +500,46 @@ document
 document
   .getElementById("lb-next")
   .addEventListener("click", () => stepLightbox(1));
+lbZoomIn.addEventListener("click", () => setLightboxZoom(lbScale + 0.5));
+lbZoomOut.addEventListener("click", () => setLightboxZoom(lbScale - 0.5));
+lbZoomReset.addEventListener("click", resetLightboxZoom);
+lbStage.addEventListener("wheel", (event) => {
+  event.preventDefault();
+  setLightboxZoom(lbScale + (event.deltaY < 0 ? 0.25 : -0.25));
+}, { passive: false });
+lbStage.addEventListener("dblclick", (event) => {
+  event.preventDefault();
+  setLightboxZoom(lbScale > 1 ? 1 : 2);
+});
+lbImg.addEventListener("pointerdown", (event) => {
+  lbImg.setPointerCapture(event.pointerId);
+  lbPointers.set(event.pointerId, event);
+  if (lbPointers.size === 2) {
+    lbPinchStartDistance = pointerDistance();
+    lbPinchStartScale = lbScale;
+    lbDragStart = null;
+  } else if (lbScale > 1) {
+    lbDragStart = { x: event.clientX - lbPanX, y: event.clientY - lbPanY };
+  }
+});
+lbImg.addEventListener("pointermove", (event) => {
+  if (!lbPointers.has(event.pointerId)) return;
+  lbPointers.set(event.pointerId, event);
+  if (lbPointers.size >= 2 && lbPinchStartDistance) {
+    setLightboxZoom(lbPinchStartScale * (pointerDistance() / lbPinchStartDistance));
+  } else if (lbDragStart && lbScale > 1) {
+    lbPanX = event.clientX - lbDragStart.x;
+    lbPanY = event.clientY - lbDragStart.y;
+    applyLightboxTransform();
+  }
+});
+function releaseLightboxPointer(event) {
+  lbPointers.delete(event.pointerId);
+  if (lbPointers.size < 2) lbPinchStartDistance = 0;
+  if (lbPointers.size === 0) lbDragStart = null;
+}
+lbImg.addEventListener("pointerup", releaseLightboxPointer);
+lbImg.addEventListener("pointercancel", releaseLightboxPointer);
 lightbox.addEventListener("click", (event) => {
   if (event.target === lightbox) {
     closeLightbox();
@@ -471,6 +553,12 @@ document.addEventListener("keydown", (event) => {
       stepLightbox(1);
     } else if (event.key === "ArrowLeft") {
       stepLightbox(-1);
+    } else if (event.key === "+" || event.key === "=") {
+      setLightboxZoom(lbScale + 0.5);
+    } else if (event.key === "-") {
+      setLightboxZoom(lbScale - 0.5);
+    } else if (event.key === "0") {
+      resetLightboxZoom();
     }
     return;
   }
