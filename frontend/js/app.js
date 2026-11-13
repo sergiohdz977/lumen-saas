@@ -17,6 +17,55 @@ const registerForm = document.getElementById("register-form");
 const loginClose = document.getElementById("login-close");
 const loginError = document.getElementById("login-error");
 const registerError = document.getElementById("register-error");
+const languageSelect = document.getElementById("language-select");
+
+const translations = {
+  en: {
+    "language.label": "Language", "notifications.all": "View all notifications", "auth.hi": "Hi",
+    "auth.login": "Log in", "auth.signup": "Sign up", "auth.welcome": "Welcome back",
+    "auth.subtitle": "Sign in to manage your studio and bookings.", "auth.create": "Create your account",
+    "auth.createSubtitle": "Customers book sessions, photographers sell them.", "auth.createButton": "Create account",
+    "hero.kicker": "Photography booking platform", "hero.title": "Find the photographer for your",
+    "hero.titleAccent": "next story", "hero.subtitle": "Browse studios, explore their specialties and book in minutes. A more considered way to find the right eye for every occasion.",
+    "hero.cta": "Explore photographers", "hero.note": "Curated for memorable moments",
+    "trust.discover": "Discover with intention", "trust.compare": "Compare the details", "trust.book": "Book with confidence", "trust.caption": "Your next chapter, beautifully framed.",
+    "guide.eyebrow": "A simpler way to begin", "guide.title": "Your perfect session,", "guide.titleAccent": "in three thoughtful steps.",
+    "guide.intro": "Lumen brings the right details forward so choosing a photographer feels as natural as the story you want to tell.",
+    "guide.step1.title": "Discover your match", "guide.step1.body": "Search by city, specialty and style to find a photographer who sees things your way.",
+    "guide.step2.title": "See the feeling", "guide.step2.body": "Explore portfolios, packages and reviews before you choose the energy that fits.",
+    "guide.step3.title": "Make it yours", "guide.step3.body": "Send a request, secure your date and keep every important detail in one place.",
+    "search.city": "City — e.g. Madrid", "search.specialty": "Specialty — e.g. weddings", "search.more": "More filters", "search.hide": "Hide filters", "search.anyRating": "Any rating", "search.anyPrice": "Any price", "search.submit": "Search", "search.clear": "Clear",
+    "footer": "Lumen — photography booking platform · API powered by Django REST Framework", "status.loading": "Loading photographers…", "status.empty": "No photographers match your search.", "status.apiError": "Could not reach the API. Is the server running on port 8000?", "card.locationUnset": "Location not set", "card.noBio": "This photographer has not added a bio yet.", "card.new": "New", "auth.invalid": "Invalid username or password.", "auth.unreachable": "Could not reach the API. Is the server running?", "auth.accountCreated": "Account created! Log in to continue."
+  },
+  es: {
+    "language.label": "Idioma", "notifications.all": "Ver todas las notificaciones", "auth.hi": "Hola",
+    "auth.login": "Iniciar sesión", "auth.signup": "Crear cuenta", "auth.welcome": "Qué bueno verte",
+    "auth.subtitle": "Entra para gestionar tu estudio y tus reservas.", "auth.create": "Crea tu cuenta",
+    "auth.createSubtitle": "Los clientes reservan sesiones y los fotógrafos las ofrecen.", "auth.createButton": "Crear cuenta",
+    "hero.kicker": "Plataforma de reservas fotográficas", "hero.title": "Encuentra al fotógrafo para tu", "hero.titleAccent": "próxima historia",
+    "hero.subtitle": "Descubre estudios, explora sus especialidades y reserva en minutos. Una forma más cuidada de encontrar la mirada adecuada para cada ocasión.", "hero.cta": "Explorar fotógrafos", "hero.note": "Selección para momentos memorables",
+    "trust.discover": "Descubre con intención", "trust.compare": "Compara los detalles", "trust.book": "Reserva con confianza", "trust.caption": "Tu próxima historia, enmarcada con intención.",
+    "guide.eyebrow": "Una forma más sencilla de empezar", "guide.title": "Tu sesión ideal,", "guide.titleAccent": "en tres pasos pensados para ti.",
+    "guide.intro": "Lumen pone los detalles importantes en primer plano para que elegir fotógrafo se sienta tan natural como la historia que quieres contar.",
+    "guide.step1.title": "Encuentra tu mirada", "guide.step1.body": "Busca por ciudad, especialidad y estilo para encontrar un fotógrafo que vea las cosas como tú.",
+    "guide.step2.title": "Siente el estilo", "guide.step2.body": "Explora portafolios, paquetes y reseñas antes de elegir la energía que más encaja contigo.",
+    "guide.step3.title": "Hazlo tuyo", "guide.step3.body": "Envía una solicitud, asegura tu fecha y guarda cada detalle importante en un solo lugar.",
+    "search.city": "Ciudad — ej. Madrid", "search.specialty": "Especialidad — ej. bodas", "search.more": "Más filtros", "search.hide": "Ocultar filtros", "search.anyRating": "Cualquier valoración", "search.anyPrice": "Cualquier precio", "search.submit": "Buscar", "search.clear": "Limpiar",
+    "footer": "Lumen — plataforma de reservas fotográficas · API desarrollada con Django REST Framework", "status.loading": "Cargando fotógrafos…", "status.empty": "Ningún fotógrafo coincide con tu búsqueda.", "status.apiError": "No se pudo conectar con la API. ¿Está funcionando el servidor en el puerto 8000?", "card.locationUnset": "Ubicación no indicada", "card.noBio": "Este fotógrafo aún no ha añadido una biografía.", "card.new": "Nuevo", "auth.invalid": "El usuario o la contraseña no son válidos.", "auth.unreachable": "No se pudo conectar con la API. ¿Está funcionando el servidor?", "auth.accountCreated": "Cuenta creada. Inicia sesión para continuar."
+  }
+};
+
+let currentLanguage = localStorage.getItem("lumen-language") || "en";
+function t(key) { return translations[currentLanguage][key] || translations.en[key] || key; }
+function applyLanguage(language) {
+  currentLanguage = translations[language] ? language : "en";
+  localStorage.setItem("lumen-language", currentLanguage);
+  document.documentElement.lang = currentLanguage;
+  document.querySelectorAll("[data-i18n]").forEach((element) => { element.textContent = t(element.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => { element.placeholder = t(element.dataset.i18nPlaceholder); });
+  if (languageSelect) { languageSelect.value = currentLanguage; languageSelect.setAttribute("aria-label", t("language.label")); }
+  if (searchMore) searchMore.textContent = searchExtra.hidden ? t("search.more") : t("search.hide");
+}
 
 let nextUrl = null;
 
@@ -39,7 +88,7 @@ function cardHtml(profile) {
   const rating =
     profile.rating_avg !== null && profile.rating_avg !== undefined
       ? `<span class="card-rating">★ ${Number(profile.rating_avg).toFixed(1)}</span>`
-      : '<span class="card-rating card-rating--none">★ New</span>';
+      : `<span class="card-rating card-rating--none">★ ${t("card.new")}</span>`;
 
   return `
     <a class="card-link" href="profile.html?slug=${encodeURIComponent(profile.slug)}">
@@ -49,11 +98,11 @@ function cardHtml(profile) {
           ${planBadge}
         </div>
         <h2>${escapeHtml(name)} ${rating}</h2>
-        <p class="meta">${escapeHtml(profile.city || "Location not set")} · @${escapeHtml(
+        <p class="meta">${escapeHtml(profile.city || t("card.locationUnset"))} · @${escapeHtml(
           profile.username
         )}</p>
         <p class="bio">${escapeHtml(
-          profile.bio || "This photographer has not added a bio yet."
+          profile.bio || t("card.noBio")
         )}</p>
         <div class="chips">${chips}</div>
       </article>
@@ -87,7 +136,7 @@ async function loadPage(url, { replace = false } = {}) {
     grid.innerHTML = "";
   }
   status.hidden = false;
-  status.textContent = "Loading photographers…";
+  status.textContent = t("status.loading");
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -104,14 +153,13 @@ async function loadPage(url, { replace = false } = {}) {
     loadMoreBtn.hidden = !nextUrl;
 
     if (grid.children.length === 0) {
-      status.textContent = "No photographers match your search.";
+      status.textContent = t("status.empty");
     } else {
       status.hidden = true;
     }
   } catch (error) {
     status.hidden = false;
-    status.textContent =
-      "Could not reach the API. Is the server running on port 8000?";
+    status.textContent = t("status.apiError");
     console.error(error);
   }
 }
@@ -182,7 +230,7 @@ async function handleLogin(event) {
     if (!response.ok) {
       loginError.textContent =
         response.status === 401 || response.status === 400
-          ? "Invalid username or password."
+          ? t("auth.invalid")
           : `Login failed (HTTP ${response.status}).`;
       loginError.hidden = false;
       return;
@@ -205,7 +253,7 @@ async function handleLogin(event) {
       window.location.href = "dashboard.html";
     }
   } catch (error) {
-    loginError.textContent = "Could not reach the API. Is the server running?";
+    loginError.textContent = t("auth.unreachable");
     loginError.hidden = false;
     console.error(error);
   }
@@ -257,10 +305,9 @@ async function handleRegister(event) {
       window.location.href = "dashboard.html";
       return;
     }
-    showToast("Account created! Log in to continue.");
+    showToast(t("auth.accountCreated"));
   } catch (error) {
-    registerError.textContent =
-      "Could not reach the API. Is the server running?";
+    registerError.textContent = t("auth.unreachable");
     registerError.hidden = false;
     console.error(error);
   }
@@ -298,7 +345,7 @@ searchClear.addEventListener("click", () => {
 searchMore.addEventListener("click", () => {
   const willOpen = searchExtra.hidden;
   searchExtra.hidden = !willOpen;
-  searchMore.textContent = willOpen ? "Hide filters" : "More filters";
+  searchMore.textContent = willOpen ? t("search.hide") : t("search.more");
   searchMore.classList.toggle("is-active", willOpen);
 });
 loadMoreBtn.addEventListener("click", () => {
@@ -332,6 +379,8 @@ document.addEventListener("keydown", (event) => {
 });
 
 header.update();
+if (languageSelect) languageSelect.addEventListener("change", (event) => applyLanguage(event.target.value));
+applyLanguage(currentLanguage);
 verifyToken();
 loadPage(listUrl());
 

@@ -10,7 +10,7 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="css/styles.css?v=61" />
+  <link rel="stylesheet" href="css/styles.css?v=62" />
 </head>
 <body>
   <header class="site-header">
@@ -33,32 +33,40 @@
           </button>
           <div id="bell-panel" class="bell-panel" hidden>
             <div id="bell-list" class="bell-list"></div>
-            <a class="bell-all" href="dashboard.html?tab=notifications">View all notifications</a>
+            <a class="bell-all" href="dashboard.html?tab=notifications" data-i18n="notifications.all">View all notifications</a>
           </div>
         </span>
                 <span id="auth-area">
           <button id="btn-signup" class="btn btn-ghost">Sign up</button>
           <button id="btn-login" class="btn btn-ghost">Log in</button>
           <span id="auth-user" hidden>
-            <span class="auth-greeting">
-              Hi, <strong id="auth-username"></strong><span id="auth-status"></span>
+                <span class="auth-greeting">
+              <span data-i18n="auth.hi">Hi</span>, <strong id="auth-username"></strong><span id="auth-status"></span>
             </span>
             <button id="btn-logout" class="btn btn-ghost">Log out</button>
           </span>
         </span>
       </nav>
+      <label class="language-switcher" for="language-select">
+        <span aria-hidden="true">文</span>
+        <span class="sr-only" data-i18n="language.label">Language</span>
+        <select id="language-select" aria-label="Language">
+          <option value="en">EN</option>
+          <option value="es">ES</option>
+        </select>
+      </label>
     </div>
   </header>
 
   <main class="container">
     <section class="hero reveal">
       <div class="hero-copy">
-        <p class="hero-kicker"><span class="status-dot" aria-hidden="true"></span> Photography booking platform</p>
-        <h1>Find the photographer for your <em>next story</em></h1>
-        <p class="hero-sub">Browse studios, explore their specialties and book in minutes. A more considered way to find the right eye for every occasion.</p>
+        <p class="hero-kicker"><span class="status-dot" aria-hidden="true"></span> <span data-i18n="hero.kicker">Photography booking platform</span></p>
+        <h1><span data-i18n="hero.title">Find the photographer for your</span> <em data-i18n="hero.titleAccent">next story</em></h1>
+        <p class="hero-sub" data-i18n="hero.subtitle">Browse studios, explore their specialties and book in minutes. A more considered way to find the right eye for every occasion.</p>
         <div class="hero-actions">
-          <a class="btn hero-cta" href="#photographers">Explore photographers <span aria-hidden="true">↗</span></a>
-          <span class="hero-note"><span class="hero-note-mark">✦</span> Curated for memorable moments</span>
+          <a class="btn hero-cta" href="#photographers"><span data-i18n="hero.cta">Explore photographers</span> <span aria-hidden="true">↗</span></a>
+          <span class="hero-note"><span class="hero-note-mark">✦</span> <span data-i18n="hero.note">Curated for memorable moments</span></span>
         </div>
       </div>
       <div class="hero-art" aria-hidden="true">
@@ -76,38 +84,38 @@
     </section>
 
     <section class="trust-strip reveal" aria-label="Lumen benefits">
-      <div class="trust-item"><strong>01</strong><span>Discover with intention</span></div>
-      <div class="trust-item"><strong>02</strong><span>Compare the details</span></div>
-      <div class="trust-item"><strong>03</strong><span>Book with confidence</span></div>
-      <p class="trust-caption">Your next chapter, beautifully framed.</p>
+      <div class="trust-item"><strong>01</strong><span data-i18n="trust.discover">Discover with intention</span></div>
+      <div class="trust-item"><strong>02</strong><span data-i18n="trust.compare">Compare the details</span></div>
+      <div class="trust-item"><strong>03</strong><span data-i18n="trust.book">Book with confidence</span></div>
+      <p class="trust-caption" data-i18n="trust.caption">Your next chapter, beautifully framed.</p>
     </section>
 
     <section class="how-it-works reveal" aria-labelledby="how-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">A simpler way to begin</p>
-          <h2 id="how-title">Your perfect session,<br /><em>in three thoughtful steps.</em></h2>
+          <p class="eyebrow" data-i18n="guide.eyebrow">A simpler way to begin</p>
+          <h2 id="how-title"><span data-i18n="guide.title">Your perfect session,</span><br /><em data-i18n="guide.titleAccent">in three thoughtful steps.</em></h2>
         </div>
-        <p class="section-heading-copy">Lumen brings the right details forward so choosing a photographer feels as natural as the story you want to tell.</p>
+        <p class="section-heading-copy" data-i18n="guide.intro">Lumen brings the right details forward so choosing a photographer feels as natural as the story you want to tell.</p>
       </div>
       <div class="guide-grid">
         <article class="guide-card guide-card--mint">
           <div class="guide-top"><span class="guide-number">01</span><span class="guide-icon" aria-hidden="true">⌕</span></div>
           <div class="guide-illustration guide-illustration--search" aria-hidden="true"><span class="guide-sun"></span><span class="guide-line guide-line--one"></span><span class="guide-line guide-line--two"></span><span class="guide-lens"></span></div>
-          <h3>Discover your match</h3>
-          <p>Search by city, specialty and style to find a photographer who sees things your way.</p>
+          <h3 data-i18n="guide.step1.title">Discover your match</h3>
+          <p data-i18n="guide.step1.body">Search by city, specialty and style to find a photographer who sees things your way.</p>
         </article>
         <article class="guide-card guide-card--warm">
           <div class="guide-top"><span class="guide-number">02</span><span class="guide-icon" aria-hidden="true">✦</span></div>
           <div class="guide-illustration guide-illustration--compare" aria-hidden="true"><span class="guide-profile guide-profile--one"></span><span class="guide-profile guide-profile--two"></span><span class="guide-star">✦</span></div>
-          <h3>See the feeling</h3>
-          <p>Explore portfolios, packages and reviews before you choose the energy that fits.</p>
+          <h3 data-i18n="guide.step2.title">See the feeling</h3>
+          <p data-i18n="guide.step2.body">Explore portfolios, packages and reviews before you choose the energy that fits.</p>
         </article>
         <article class="guide-card guide-card--blue">
           <div class="guide-top"><span class="guide-number">03</span><span class="guide-icon" aria-hidden="true">↗</span></div>
           <div class="guide-illustration guide-illustration--book" aria-hidden="true"><span class="guide-calendar"><i></i><i></i><i></i><i></i></span><span class="guide-check">✓</span></div>
-          <h3>Make it yours</h3>
-          <p>Send a request, secure your date and keep every important detail in one place.</p>
+          <h3 data-i18n="guide.step3.title">Make it yours</h3>
+          <p data-i18n="guide.step3.body">Send a request, secure your date and keep every important detail in one place.</p>
         </article>
       </div>
     </section>
@@ -115,20 +123,20 @@
     <section id="photographers" class="reveal">
       <form id="search-form" class="search-bar" role="search">
         <label class="sr-only" for="search-city">City</label>
-        <input id="search-city" type="search" placeholder="City — e.g. Madrid" />
+        <input id="search-city" type="search" placeholder="City — e.g. Madrid" data-i18n-placeholder="search.city" />
         <label class="sr-only" for="search-specialty">Specialty</label>
-        <input id="search-specialty" type="search" placeholder="Specialty — e.g. weddings" />
-        <button class="btn btn-ghost" id="search-more" type="button">More filters</button>
+        <input id="search-specialty" type="search" placeholder="Specialty — e.g. weddings" data-i18n-placeholder="search.specialty" />
+        <button class="btn btn-ghost" id="search-more" type="button" data-i18n="search.more">More filters</button>
         <div id="search-extra" class="search-extra" hidden>
           <label class="sr-only" for="search-rating">Minimum rating</label>
           <select id="search-rating">
-            <option value="">Any rating</option>
+            <option value="" data-i18n="search.anyRating">Any rating</option>
             <option value="4.5">4.5+ ★</option>
             <option value="4">4.0+ ★</option>
           </select>
           <label class="sr-only" for="search-price">Max price</label>
           <select id="search-price">
-            <option value="">Any price</option>
+            <option value="" data-i18n="search.anyPrice">Any price</option>
             <option value="50">Up to $50</option>
             <option value="100">Up to $100</option>
             <option value="300">Up to $300</option>
@@ -136,8 +144,8 @@
             <option value="1000">Up to $1,000</option>
           </select>
         </div>
-        <button class="btn" type="submit">Search</button>
-        <button class="btn btn-ghost" id="search-clear" type="button" hidden>Clear</button>
+        <button class="btn" type="submit" data-i18n="search.submit">Search</button>
+        <button class="btn btn-ghost" id="search-clear" type="button" hidden data-i18n="search.clear">Clear</button>
       </form>
       <div id="status" class="status">Loading photographers…</div>
       <div id="grid" class="grid"></div>
@@ -149,7 +157,7 @@
 
   <footer class="site-footer">
     <div class="container">
-      Lumen — photography booking platform · API powered by Django REST Framework
+      <span data-i18n="footer">Lumen — photography booking platform · API powered by Django REST Framework</span>
     </div>
   </footer>
 
@@ -158,26 +166,26 @@
       <button id="login-close" class="modal-close" type="button" aria-label="Close">&times;</button>
 
       <div class="modal-tabs" role="tablist">
-        <button type="button" class="modal-tab is-active" data-auth-tab="login">Log in</button>
-        <button type="button" class="modal-tab" data-auth-tab="register">Sign up</button>
+        <button type="button" class="modal-tab is-active" data-auth-tab="login" data-i18n="auth.login">Log in</button>
+        <button type="button" class="modal-tab" data-auth-tab="register" data-i18n="auth.signup">Sign up</button>
       </div>
 
       <div data-auth-panel="login">
-        <h2>Welcome back</h2>
-        <p class="modal-sub">Sign in to manage your studio and bookings.</p>
+        <h2 data-i18n="auth.welcome">Welcome back</h2>
+        <p class="modal-sub" data-i18n="auth.subtitle">Sign in to manage your studio and bookings.</p>
         <form id="login-form">
           <label for="login-username">Username</label>
           <input id="login-username" name="username" autocomplete="username" required />
           <label for="login-password">Password</label>
           <input id="login-password" name="password" type="password" autocomplete="current-password" required />
           <p id="login-error" class="form-error" hidden></p>
-          <button class="btn btn-block" type="submit">Log in</button>
+          <button class="btn btn-block" type="submit" data-i18n="auth.login">Log in</button>
         </form>
       </div>
 
       <div data-auth-panel="register" hidden>
-        <h2>Create your account</h2>
-        <p class="modal-sub">Customers book sessions, photographers sell them.</p>
+        <h2 data-i18n="auth.create">Create your account</h2>
+        <p class="modal-sub" data-i18n="auth.createSubtitle">Customers book sessions, photographers sell them.</p>
         <form id="register-form">
           <label for="reg-username">Username</label>
           <input id="reg-username" name="username" autocomplete="username" required />
@@ -192,13 +200,13 @@
           <input id="reg-password" name="password" type="password" autocomplete="new-password" minlength="8" required />
           <p class="form-hint">At least 8 characters.</p>
           <p id="register-error" class="form-error" hidden></p>
-          <button class="btn btn-block" type="submit">Create account</button>
+          <button class="btn btn-block" type="submit" data-i18n="auth.createButton">Create account</button>
         </form>
       </div>
     </div>
   </div>
 
-  <script src="js/common.js?v=61"></script>
-  <script src="js/app.js?v=61"></script>
+  <script src="js/common.js?v=62"></script>
+  <script src="js/app.js?v=62"></script>
 </body>
 </html>
