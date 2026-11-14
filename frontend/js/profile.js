@@ -584,7 +584,9 @@ document.addEventListener("keydown", (event) => {
 function updateBookSubmitState() {
   const hasDate = Boolean(bookDate.value);
   const hasLocation = Boolean(bookLocation.value.trim());
-  bookSubmit.disabled = !(hasDate && hasLocation && bookPolicyCheck.checked);
+  const ready = hasDate && hasLocation && bookPolicyCheck.checked;
+  bookSubmit.classList.toggle("is-disabled", !ready);
+  bookSubmit.setAttribute("aria-disabled", ready ? "false" : "true");
 }
 
 function openBookModal(packageId, title) {

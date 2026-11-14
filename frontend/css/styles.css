@@ -286,7 +286,9 @@ nav a:hover {
 }
 
 .btn:disabled,
-.btn:disabled:hover {
+.btn:disabled:hover,
+.btn.is-disabled,
+.btn.is-disabled:hover {
   opacity: 0.55;
   cursor: not-allowed;
   filter: none;

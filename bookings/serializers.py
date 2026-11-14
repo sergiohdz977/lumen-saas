@@ -110,6 +110,14 @@ class BookingRequestSerializer(serializers.ModelSerializer):
             "expected_refund_cents",
             "created_at",
         ]
+        extra_kwargs = {
+            "event_location": {
+                "error_messages": {
+                    "blank": "Please add the event location.",
+                    "required": "Please add the event location.",
+                }
+            }
+        }
 
     def get_shoot(self, obj):
         shoot = getattr(obj, "shoot", None)

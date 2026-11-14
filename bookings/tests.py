@@ -142,6 +142,10 @@ class BookingEndpointsTests(TestCase):
         response = self.api.post("/api/bookings/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("event_location", response.data)
+        self.assertEqual(
+            response.data["event_location"][0],
+            "Please add the event location.",
+        )
         self.assertEqual(BookingRequest.objects.count(), 2)
 
     def test_policy_must_be_accepted(self):
