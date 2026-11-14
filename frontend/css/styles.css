@@ -430,6 +430,12 @@ nav a:hover {
   justify-content: center;
   z-index: 50;
   padding: 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+body:has(.modal:not([hidden])) {
+  overflow: hidden;
 }
 
 .modal[hidden] {
@@ -444,6 +450,10 @@ nav a:hover {
   padding: 30px;
   width: 100%;
   max-width: 380px;
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  margin: auto;
 }
 
 .modal-panel h2 {
