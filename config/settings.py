@@ -283,7 +283,10 @@ FREE_TIER_PHOTOS = int(os.getenv("FREE_TIER_PHOTOS", "100"))
 # Cloudinary photo storage. With no credentials the project falls back
 # to local storage (see galleries/storage.py).
 CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "")
-if CLOUDINARY_CLOUD_NAME and "test" not in sys.argv:
+if "test" in sys.argv:
+    # Tests always use local storage, never the real Cloudinary account.
+    CLOUDINARY_CLOUD_NAME = ""
+if CLOUDINARY_CLOUD_NAME:
     import cloudinary
 
     cloudinary.config(

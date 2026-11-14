@@ -581,6 +581,12 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+function updateBookSubmitState() {
+  const hasDate = Boolean(bookDate.value);
+  const hasLocation = Boolean(bookLocation.value.trim());
+  bookSubmit.disabled = !(hasDate && hasLocation && bookPolicyCheck.checked);
+}
+
 function openBookModal(packageId, title) {
   bookForm.dataset.packageId = packageId;
   document.getElementById("book-package").textContent = title;
@@ -594,7 +600,7 @@ function openBookModal(packageId, title) {
   bookForm.dataset.policySummary =
     (pkg && pkg.cancellation_summary) || "";
   bookPolicyName.textContent = cancellationPolicyLabel(policy);
-  bookSubmit.disabled = true;
+  updateBookSubmitState();
   const now = new Date();
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   bookDate.min = now.toISOString().slice(0, 10);
@@ -637,6 +643,11 @@ async function handleBookSubmit(event) {
   const packageId = Number(bookForm.dataset.packageId);
   if (!bookDate.value) {
     bookError.textContent = "Please choose a date.";
+    bookError.hidden = false;
+    return;
+  }
+  if (!bookLocation.value.trim()) {
+    bookError.textContent = "Please add the event location.";
     bookError.hidden = false;
     return;
   }
@@ -909,9 +920,11 @@ bookModal.addEventListener("click", (event) => {
   }
 });
 bookForm.addEventListener("submit", handleBookSubmit);
-bookPolicyCheck.addEventListener("change", () => {
-  bookSubmit.disabled = !bookPolicyCheck.checked;
-});
+bookDate.addEventListener("input", updateBookSubmitState);
+bookDate.addEventListener("change", updateBookSubmitState);
+bookLocation.addEventListener("input", updateBookSubmitState);
+bookLocation.addEventListener("change", updateBookSubmitState);
+bookPolicyCheck.addEventListener("change", updateBookSubmitState);
 bookPolicyLink.addEventListener("click", (event) => {
   event.preventDefault();
   openPolicyModal();

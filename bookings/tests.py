@@ -83,6 +83,7 @@ class BookingEndpointsTests(TestCase):
         self.valid_payload = {
             "package": self.package.pk,
             "date": "2026-12-15T15:00:00Z",
+            "event_location": "Downtown studio",
             "message": "I want to book",
             "policy_accepted": True,
         }
@@ -131,11 +132,24 @@ class BookingEndpointsTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("date", response.data)
 
+    def test_event_location_is_required(self):
+        self.api.force_authenticate(self.customer)
+        payload = {
+            "package": self.package.pk,
+            "date": "2026-12-15T15:00:00Z",
+            "policy_accepted": True,
+        }
+        response = self.api.post("/api/bookings/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("event_location", response.data)
+        self.assertEqual(BookingRequest.objects.count(), 2)
+
     def test_policy_must_be_accepted(self):
         self.api.force_authenticate(self.customer)
         payload = {
             "package": self.package.pk,
             "date": "2026-12-15T15:00:00Z",
+            "event_location": "Downtown studio",
         }
         response = self.api.post("/api/bookings/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -493,6 +507,7 @@ class MarketplaceJourneyTests(TestCase):
             {
                 "package": package_id,
                 "date": "2026-11-20T15:00:00Z",
+                "event_location": "Downtown studio",
                 "message": "I want to book",
                 "policy_accepted": True,
             },
@@ -552,6 +567,7 @@ class MarketplaceJourneyTests(TestCase):
             {
                 "package": package.pk,
                 "date": "2026-11-20T10:00:00Z",
+                "event_location": "Downtown studio",
                 "message": "primera",
                 "policy_accepted": True,
             },
@@ -573,6 +589,7 @@ class MarketplaceJourneyTests(TestCase):
             {
                 "package": package.pk,
                 "date": "2026-11-25T10:00:00Z",
+                "event_location": "Downtown studio",
                 "message": "segunda",
                 "policy_accepted": True,
             },
@@ -741,6 +758,7 @@ class BookingNotificationTests(TestCase):
             {
                 "package": self.package.pk,
                 "date": "2026-12-15T15:00:00Z",
+                "event_location": "Downtown studio",
                 "message": "I want to book",
                 "policy_accepted": True,
             },

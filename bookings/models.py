@@ -29,7 +29,7 @@ class BookingRequest(models.Model):
         related_name="booking_requests",
     )
     date = models.DateTimeField()
-    event_location = models.CharField(max_length=255, blank=True)
+    event_location = models.CharField(max_length=255)
     event_time = models.TimeField(null=True, blank=True)
     event_notes = models.TextField(blank=True)
     message = models.TextField(blank=True)
