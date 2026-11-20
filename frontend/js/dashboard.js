@@ -1329,7 +1329,7 @@ function openRequestDrawer() {
 function detailNote(booking, isPhotographer) {
   if (booking.status === "requested") {
     return isPhotographer
-      ? '<p class="detail-note">Negotiate below: send a custom offer, record a cash payment, or reject.</p>'
+      ? ""
       : '<p class="detail-note">Waiting for the photographer to answer your request.</p>';
   }
   if (booking.status === "awaiting_payment") {
@@ -1486,6 +1486,9 @@ function renderRequestDetail(booking) {
     ${booking.message ? `<p class="req-msg">${escapeHtml(booking.message)}</p>` : ""}
     ${reviewBlock}
     <div class="chat-container">
+      <div class="chat-header">
+        <button type="button" class="chat-help-btn" id="btn-help-chat" aria-label="Chat help" title="Chat help">?</button>
+      </div>
       <div class="chat-messages" id="chat-messages" data-customer="${escapeHtml(
         booking.customer_username || ""
       )}">
@@ -4472,9 +4475,47 @@ async function init() {
   });
 }
 
+const CHAT_INFO_STORAGE_KEY = "has_seen_chat_info_modal";
+
+function initChatInfoModal() {
+  const modal = document.getElementById("info-modal-chat");
+  const goButton = document.getElementById("btn-go-chat");
+  const closeButton = document.getElementById("info-chat-close");
+  if (!modal || !goButton) {
+    return;
+  }
+  if (localStorage.getItem(CHAT_INFO_STORAGE_KEY) === null) {
+    modal.hidden = false;
+  }
+  goButton.addEventListener("click", () => {
+    modal.hidden = true;
+    localStorage.setItem(CHAT_INFO_STORAGE_KEY, "true");
+    const input = document.getElementById("chat-input");
+    if (input) {
+      input.focus();
+    }
+  });
+  if (closeButton) {
+    closeButton.addEventListener("click", () => {
+      modal.hidden = true;
+    });
+  }
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      modal.hidden = true;
+    }
+  });
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("#btn-help-chat")) {
+      modal.hidden = false;
+    }
+  });
+}
+
 initHeader();
 wireProfilePictureUpload();
 wireCoverUpload();
 wireAccountActions();
 wireDirtyForms();
+initChatInfoModal();
 init();
