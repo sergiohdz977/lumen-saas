@@ -1485,14 +1485,34 @@ function renderRequestDetail(booking) {
     }
     ${booking.message ? `<p class="req-msg">${escapeHtml(booking.message)}</p>` : ""}
     ${reviewBlock}
-    <div class="chat-box">
-      <div class="chat-list" id="chat-list"><p class="meta">Loading messages…</p></div>
+    <div class="chat-container">
+      <div class="chat-messages" id="chat-messages" data-customer="${escapeHtml(
+        booking.customer_username || ""
+      )}">
+        <p class="meta">Loading messages…</p>
+        <!--
+        <div class="message-row client">
+          <div class="avatar">S</div>
+          <div class="message-bubble">
+            <span class="message-sender">Sergito</span>
+            <p class="message-text">hello</p>
+            <span class="message-time">14/11/2026, 2:11 p.m.</span>
+          </div>
+        </div>
+        <div class="message-row photographer">
+          <div class="message-bubble">
+            <p class="message-text">Hola Sergito, ¿en qué puedo ayudarte con la sesión?</p>
+            <span class="message-time">14/11/2026, 2:15 p.m.</span>
+          </div>
+        </div>
+        -->
+      </div>
       ${
         booking.status === "cancelled"
           ? '<div class="chat-closed">This conversation is closed because the booking was cancelled.</div>'
-          : `<form class="chat-form" id="chat-form">
-        <input id="chat-input" type="text" maxlength="500" placeholder="Write a message…" autocomplete="off" aria-label="Message" />
-        <button class="btn btn-sm" type="submit">Send</button>
+          : `<form class="chat-input-area" id="chat-form">
+        <input id="chat-input" type="text" maxlength="500" placeholder="Write a message…" class="chat-input" autocomplete="off" aria-label="Message" />
+        <button type="submit" class="chat-send-btn">Send</button>
       </form>`
       }
     </div>`;
@@ -1666,7 +1686,7 @@ document
   });
 
 async function loadChat(bookingId) {
-  const list = document.getElementById("chat-list");
+  const list = document.getElementById("chat-messages");
   if (!list) {
     return;
   }
@@ -1684,11 +1704,11 @@ async function loadChat(bookingId) {
 }
 
 function renderChat(messages, forceBottom) {
-  const list = document.getElementById("chat-list");
+  const list = document.getElementById("chat-messages");
   if (!list) {
     return;
   }
-  const username = localStorage.getItem(STORAGE.username) || "";
+  const customer = list.dataset.customer || "";
   if (!messages || messages.length === 0) {
     list.innerHTML = '<p class="meta">No messages yet. Say hello!</p>';
     return;
@@ -1697,24 +1717,36 @@ function renderChat(messages, forceBottom) {
     list.scrollHeight - list.scrollTop - list.clientHeight < 60;
   list.innerHTML = messages
     .map((message) => {
-      const time = `<span class="chat-time">${formatDate(message.created_at, {
+      const time = formatDate(message.created_at, {
         withTime: true,
-      })}</span>`;
+      });
       if (message.is_system || !message.sender_username) {
-        return `<div class="chat-line chat-system">${escapeHtml(
-          message.text
-        )}${time}</div>`;
+        return `
+        <div class="message-row system">
+          <div class="message-bubble">
+            <p class="message-text">${escapeHtml(message.text)}</p>
+            <span class="message-time">${time}</span>
+          </div>
+        </div>`;
       }
-      const mine = message.sender_username === username;
+      const isClient = message.sender_username === customer;
+      const initial = escapeHtml(
+        message.sender_username.charAt(0).toUpperCase()
+      );
       return `
-      <div class="chat-line ${mine ? "chat-mine" : "chat-theirs"}">
-        <div class="chat-bubble">
-          <span class="chat-author">${
-            mine ? "You" : escapeHtml(message.sender_username)
-          }</span>
-          <span class="chat-text">${escapeHtml(message.text)}</span>
+      <div class="message-row ${isClient ? "client" : "photographer"}">
+        ${isClient ? `<div class="avatar">${initial}</div>` : ""}
+        <div class="message-bubble">
+          ${
+            isClient
+              ? `<span class="message-sender">${escapeHtml(
+                  message.sender_username
+                )}</span>`
+              : ""
+          }
+          <p class="message-text">${escapeHtml(message.text)}</p>
+          <span class="message-time">${time}</span>
         </div>
-        ${time}
       </div>`;
     })
     .join("");
