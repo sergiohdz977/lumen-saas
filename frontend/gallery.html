@@ -10,7 +10,15 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="css/styles.css?v=86" />
+  <script>
+    try {
+      if (localStorage.getItem("lumen-theme") === "dark") {
+        document.documentElement.dataset.theme = "dark";
+        document.documentElement.style.colorScheme = "dark";
+      }
+    } catch (error) {}
+  </script>
+  <link rel="stylesheet" href="css/styles.css?v=87" />
 </head>
 <body>
   <header class="site-header">
@@ -97,7 +105,7 @@
     </span>
   </div>
 
-  <script src="js/common.js?v=86"></script>
-  <script src="js/gallery.js?v=86"></script>
+  <script src="js/common.js?v=87"></script>
+  <script src="js/gallery.js?v=87"></script>
 </body>
 </html>

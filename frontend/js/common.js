@@ -666,6 +666,58 @@ function formatDate(value, { withTime = false } = {}) {
       });
 }
 
+/* Light/dark theme: persisted in localStorage and applied to <html>.
+   An inline script in each page head sets the attribute early to avoid
+   a flash of the wrong theme. */
+const THEME_KEY = "lumen-theme";
+
+function syncThemeButton() {
+  const button = document.getElementById("btn-theme");
+  if (!button) {
+    return;
+  }
+  const dark = document.documentElement.dataset.theme === "dark";
+  const label = button.querySelector("#theme-label");
+  if (label) {
+    label.textContent = dark ? "Light mode" : "Dark mode";
+  }
+  button.setAttribute(
+    "aria-label",
+    dark ? "Switch to light mode" : "Switch to dark mode"
+  );
+  button.setAttribute(
+    "title",
+    dark ? "Switch to light mode" : "Switch to dark mode"
+  );
+  button.setAttribute("aria-pressed", String(dark));
+}
+
+function applyTheme(theme, persist = true) {
+  const dark = theme === "dark";
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  if (persist) {
+    try {
+      localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  syncThemeButton();
+}
+
+(function restoreTheme() {
+  let saved = null;
+  try {
+    saved = localStorage.getItem(THEME_KEY);
+  } catch (error) {
+    saved = null;
+  }
+  if (saved === "dark" || saved === "light") {
+    applyTheme(saved, false);
+  }
+})();
+
 /* Wire the header log in / sign up / log out buttons present on every page.
    Returns { update } to refresh the visible state after auth changes. */
 const headerUpdaters = [];
@@ -686,6 +738,23 @@ function initHeader({ onLogin, onSignup } = {}) {
     menuToggle.setAttribute("aria-expanded", "false");
     menuToggle.innerHTML = '<span></span><span></span><span></span>';
     nav.parentElement.insertBefore(menuToggle, nav);
+  }
+  if (nav && !document.getElementById("btn-theme")) {
+    const themeButton = document.createElement("button");
+    themeButton.id = "btn-theme";
+    themeButton.className = "nav-theme";
+    themeButton.type = "button";
+    themeButton.innerHTML = `
+      <svg class="theme-icon theme-icon--moon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <span id="theme-label">Dark mode</span>`;
+    const authArea = nav.querySelector("#auth-area");
+    nav.insertBefore(themeButton, authArea || null);
+    themeButton.addEventListener("click", () => {
+      const dark = document.documentElement.dataset.theme === "dark";
+      applyTheme(dark ? "light" : "dark");
+    });
+    syncThemeButton();
   }
   const btnLogin = document.getElementById("btn-login");
   const btnSignup = document.getElementById("btn-signup");
