@@ -4760,3 +4760,99 @@ html[data-theme="dark"] .chat-empty {
 html[data-theme="dark"] .chat-empty svg {
   color: #3a4856;
 }
+
+/* ---------- Notification bell panel (mobile sheet) ---------- */
+.bell-close {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  #bell-panel.bell-panel {
+    position: fixed;
+    inset: 0;
+    width: 100vw !important;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    padding: calc(env(safe-area-inset-top, 0px) + 52px) 16px
+      calc(env(safe-area-inset-bottom, 0px) + 14px);
+    border: 0;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 90;
+  }
+
+  .bell-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    right: 12px;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+  }
+
+  .bell-close:hover,
+  .bell-close:focus-visible {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .bell-panel .bell-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 80vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bell-panel .bell-item {
+    padding: 12px 4px;
+    border-radius: 0;
+    border-bottom: 1px solid var(--line);
+    gap: 3px;
+  }
+
+  .bell-panel .bell-item:hover,
+  .bell-panel .bell-item:focus-visible {
+    transform: none;
+    box-shadow: none;
+    background: var(--panel-2);
+  }
+
+  .bell-panel .bell-item strong {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .bell-panel .bell-item .meta {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .bell-panel .bell-item .bell-time {
+    font-size: 11px;
+    margin-top: 2px;
+  }
+
+  .bell-panel .bell-all {
+    flex: 0 0 auto;
+    width: 100%;
+    text-align: center;
+    padding: 12px;
+    font-size: 14px;
+  }
+}

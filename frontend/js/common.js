@@ -896,6 +896,30 @@ function initBell() {
     button.setAttribute("aria-expanded", "false");
   };
 
+  /* On mobile the panel is a full-screen sheet, so it must escape the
+     header (backdrop-filter would trap position: fixed). */
+  const panelQuery = window.matchMedia("(max-width: 768px)");
+  const placePanel = () => {
+    if (panelQuery.matches) {
+      if (panel.parentElement !== document.body) {
+        document.body.appendChild(panel);
+      }
+    } else if (panel.parentElement !== area) {
+      area.appendChild(panel);
+    }
+  };
+  placePanel();
+  if (panelQuery.addEventListener) {
+    panelQuery.addEventListener("change", placePanel);
+  } else if (panelQuery.addListener) {
+    panelQuery.addListener(placePanel);
+  }
+
+  const closeButton = document.getElementById("bell-close");
+  if (closeButton) {
+    closeButton.addEventListener("click", close);
+  }
+
   async function loadBadge() {
     if (!isLoggedIn()) {
       badge.hidden = true;
@@ -1009,7 +1033,11 @@ function initBell() {
     }
   });
   document.addEventListener("click", (event) => {
-    if (!panel.hidden && !area.contains(event.target)) {
+    if (
+      !panel.hidden &&
+      !area.contains(event.target) &&
+      !panel.contains(event.target)
+    ) {
       close();
     }
   });
