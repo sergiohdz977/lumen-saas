@@ -10,7 +10,7 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="css/styles.css?v=73" />
+  <link rel="stylesheet" href="css/styles.css?v=75" />
 </head>
 <body>
   <header class="site-header">
@@ -570,13 +570,27 @@
   <div id="info-modal-chat" class="modal" hidden>
     <div class="modal-panel chat-info-panel">
       <button class="modal-close" id="info-chat-close" type="button" aria-label="Close">&times;</button>
-      <h2>Chat</h2>
-      <p class="chat-info-text">Negotiate below: send a custom offer, record a cash payment, or reject.</p>
-      <button class="btn btn-block chat-info-btn" id="btn-go-chat" type="button">Go to chat</button>
+      <div class="modal-content">
+        <h2 class="modal-title">Negocia y cierra tu reserva</h2>
+        <p class="modal-text">Este es tu espacio privado para hablar con el fotógrafo, acordar los detalles de la sesión y cerrar el trato a tu medida.</p>
+
+        <p class="modal-text">Desde aquí puedes:</p>
+        <ul class="modal-list">
+          <li><strong>Enviar ofertas personalizadas:</strong> Propón un precio o paquete diferente.</li>
+          <li><strong>Registrar pagos en efectivo:</strong> Si acordáis pagar fuera de la plataforma.</li>
+          <li><strong>Rechazar la solicitud:</strong> Si las condiciones no encajan.</li>
+        </ul>
+
+        <p class="modal-text disclaimer">
+          Todos los acuerdos y depósitos realizados a través de Lumen están protegidos por nuestra política de moderación.
+        </p>
+
+        <button id="btn-go-chat" class="btn-primary" type="button">Ir al chat</button>
+      </div>
     </div>
   </div>
 
-  <script src="js/common.js?v=73"></script>
-  <script src="js/dashboard.js?v=73"></script>
+  <script src="js/common.js?v=75"></script>
+  <script src="js/dashboard.js?v=75"></script>
 </body>
 </html>

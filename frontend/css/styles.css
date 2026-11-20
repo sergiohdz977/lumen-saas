@@ -3992,3 +3992,167 @@ body {
 .chat-info-btn:hover {
   background-color: #1f4350;
 }
+
+/* Estilos para el contenido del modal */
+.modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 12px;
+}
+
+.modal-text {
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.modal-text.disclaimer {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 16px;
+  line-height: 1.4;
+}
+
+.modal-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px 0;
+}
+
+.modal-list li {
+  font-size: 13px;
+  color: #475569;
+  margin-bottom: 8px;
+  padding-left: 16px;
+  position: relative;
+  line-height: 1.4;
+}
+
+.modal-list li::before {
+  content: "•";
+  color: #2b5c6b; /* Color de tu marca */
+  font-weight: bold;
+  position: absolute;
+  left: 0;
+}
+
+/* Asegurar que el botón principal se vea bien */
+.btn-primary {
+  background-color: #2b5c6b;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  text-align: center;
+  margin-top: 20px;
+  width: 100%;
+}
+
+.btn-primary:hover {
+  background-color: #1f4350;
+}
+
+/* Contenedor principal del acordeón */
+.booking-accordion {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+/* Cabecera clickeable */
+.accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.booking-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.badge-status {
+  background-color: #fef3c7; /* Amarillo suave */
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.booking-price {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Icono de la flecha */
+.accordion-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  transition: transform 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Rotación de la flecha cuando está abierto */
+.booking-accordion.open .accordion-icon {
+  transform: rotate(180deg);
+}
+
+/* Contenido desplegable (Animación de altura) */
+.accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, opacity 0.3s ease-out, margin-top 0.3s ease;
+  opacity: 0;
+}
+
+.booking-accordion.open .accordion-content {
+  max-height: 300px; /* Ajusta si el contenido es muy largo */
+  opacity: 1;
+  margin-top: 12px;
+}
+
+/* Estilos internos del contenido */
+.client-info {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.policy-alert {
+  background-color: #f0fdf4; /* Verde muy suave */
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}

@@ -1370,7 +1370,7 @@ function renderRequestDetail(booking) {
   const policyLabel = cancellationPolicyLabel(booking.cancellation_policy);
   const policyBanner =
     isPhotographer && booking.policy_accepted
-      ? `<p class="policy-banner">Client agreed to the ${policyLabel} policy${
+      ? `<p class="policy-alert">Client agreed to the ${policyLabel} policy${
           booking.cancellation_policy_summary
             ? ` — ${booking.cancellation_policy_summary}`
             : "."
@@ -1452,30 +1452,44 @@ function renderRequestDetail(booking) {
     }
   }
   const switching = body.dataset.renderedId !== String(booking.id);
+  const accordionWasOpen = Boolean(
+    body.querySelector(".booking-accordion.open")
+  );
   body.dataset.renderedId = String(booking.id);
   body.innerHTML = `
-    <div class="detail-summary">
-      <div class="detail-title">
-        <strong>${escapeHtml(booking.package_title)}</strong>
-        <span class="meta">${other} · ${formatDate(booking.date)}</span>
+    <div class="booking-accordion">
+      <div class="accordion-header" id="accordion-toggle">
+        <div class="header-main">
+          <h3 class="booking-title">${escapeHtml(booking.package_title)}</h3>
+          <div class="header-meta">
+            <span class="badge-status">${escapeHtml(
+              STATUS_LABELS[booking.status] || booking.status
+            )}</span>
+            <span class="booking-price">$${price.toFixed(2)}</span>
+          </div>
+        </div>
+        <button class="accordion-icon" type="button" aria-label="Toggle details" aria-expanded="false">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
       </div>
-      <div class="detail-price">
-        ${statusChip(booking.status)}
-        <strong>$${price.toFixed(2)}</strong>
+      <div class="accordion-content" id="accordion-content">
+        <p class="client-info">${other} · ${formatDate(booking.date)}</p>
+        ${policyBanner}
+        <div class="detail-grid">
+          ${rows
+            .map(
+              ([key, value]) =>
+                `<div class="kv"><span>${escapeHtml(
+                  key
+                )}</span><strong>${escapeHtml(value)}</strong></div>`
+            )
+            .join("")}
+        </div>
       </div>
     </div>
     ${detailNote(booking, isPhotographer)}
-    ${policyBanner}
-    <div class="detail-grid">
-      ${rows
-        .map(
-          ([key, value]) =>
-            `<div class="kv"><span>${escapeHtml(
-              key
-            )}</span><strong>${escapeHtml(value)}</strong></div>`
-        )
-        .join("")}
-    </div>
     ${
       booking.event_notes
         ? `<p class="req-msg"><strong>Notes:</strong> ${escapeHtml(
@@ -1519,6 +1533,24 @@ function renderRequestDetail(booking) {
       </form>`
       }
     </div>`;
+  const accordion = body.querySelector(".booking-accordion");
+  const accordionToggle = body.querySelector("#accordion-toggle");
+  if (accordion && accordionToggle) {
+    const accordionButton = accordionToggle.querySelector(".accordion-icon");
+    const setExpanded = (open) => {
+      if (accordionButton) {
+        accordionButton.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+    };
+    if (!switching && accordionWasOpen) {
+      accordion.classList.add("open");
+      setExpanded(true);
+    }
+    accordionToggle.addEventListener("click", () => {
+      const open = accordion.classList.toggle("open");
+      setExpanded(open);
+    });
+  }
   if (switching) {
     body.scrollTop = 0;
   }
