@@ -1500,9 +1500,6 @@ function renderRequestDetail(booking) {
     ${booking.message ? `<p class="req-msg">${escapeHtml(booking.message)}</p>` : ""}
     ${reviewBlock}
     <div class="chat-container">
-      <div class="chat-header">
-        <button type="button" class="chat-help-btn" id="btn-help-chat" aria-label="Chat help" title="Chat help">?</button>
-      </div>
       <div class="chat-messages" id="chat-messages" data-customer="${escapeHtml(
         booking.customer_username || ""
       )}">
@@ -4537,11 +4534,12 @@ function initChatInfoModal() {
       modal.hidden = true;
     }
   });
-  document.addEventListener("click", (event) => {
-    if (event.target.closest("#btn-help-chat")) {
+  const helpButton = document.getElementById("btn-help-chat");
+  if (helpButton) {
+    helpButton.addEventListener("click", () => {
       modal.hidden = false;
-    }
-  });
+    });
+  }
 }
 
 initHeader();

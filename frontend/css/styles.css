@@ -4156,3 +4156,33 @@ body {
   font-size: 12px;
   line-height: 1.4;
 }
+
+/* Chat fills the available height inside the booking drawer */
+.drawer-head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drawer-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-container {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 320px;
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.chat-messages {
+  flex: 1;
+  min-height: 0;
+  background-color: #f0f2f5;
+}
+
+.chat-input-area {
+  flex-shrink: 0;
+}
