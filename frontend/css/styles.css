@@ -4392,3 +4392,128 @@ body {
 .accordion-header {
   padding: 4px 0;
 }
+
+/* ---------- Final drawer UI polish ---------- */
+.chat-messages {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background-color: #f9fafb;
+}
+
+#chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+#chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#chat-messages::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+#chat-messages::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Primary action darkens on hover */
+.detail-actions .btn:not(.btn-ghost):not([data-detail-offer]):hover {
+  background: #1f4350;
+  border-color: #1f4350;
+  filter: none;
+}
+
+/* Outline actions get a very light grey hover */
+.detail-actions .btn-ghost:hover,
+.detail-actions [data-detail-offer]:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  filter: none;
+}
+
+.detail-actions [data-detail-cancel]:hover {
+  color: #2b5c6b;
+  background: none;
+}
+
+/* ---------- Chat skeleton loader + empty state ---------- */
+.chat-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.skeleton-row--right {
+  justify-content: flex-end;
+}
+
+.skeleton-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.skeleton-bubble {
+  height: 38px;
+  width: 60%;
+  border-radius: 14px;
+}
+
+.skeleton-row--right .skeleton-bubble {
+  width: 45%;
+}
+
+.skeleton-row:nth-child(3) .skeleton-bubble {
+  width: 70%;
+}
+
+.skeleton-avatar,
+.skeleton-bubble {
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 37%, #e5e7eb 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-avatar,
+  .skeleton-bubble {
+    animation: none;
+  }
+}
+
+.chat-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.chat-empty svg {
+  width: 34px;
+  height: 34px;
+  color: #cbd5e1;
+}
+
+.chat-empty p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
