@@ -4517,3 +4517,73 @@ body {
   font-size: 13px;
   line-height: 1.4;
 }
+
+/* ---------- Action groups by booking status ---------- */
+[hidden] {
+  display: none !important;
+}
+
+.detail-actions .action-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.detail-actions .action-group:empty {
+  display: none;
+}
+
+#actions-requested .btn-accept {
+  margin-left: auto;
+}
+
+#actions-confirmed [data-detail-cancel],
+.detail-actions [data-detail-cancel] {
+  font-size: 11px;
+  color: #b91c1c;
+  text-decoration: underline;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* ---------- Message entrance animation ---------- */
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-row {
+  animation: messageIn 0.22s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-row {
+    animation: none;
+  }
+}
+
+/* ---------- Icon send button ---------- */
+.chat-send-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.chat-send-btn svg {
+  width: 18px;
+  height: 18px;
+}

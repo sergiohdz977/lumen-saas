@@ -1389,6 +1389,8 @@ function renderRequestDetail(booking) {
       : null,
   ].filter(Boolean);
   let actions = "";
+  let requestedActions = "";
+  let confirmedActions = "";
   const canCancel = [
     "requested",
     "awaiting_payment",
@@ -1398,24 +1400,27 @@ function renderRequestDetail(booking) {
     ? `<button class="btn btn-ghost btn-sm btn-danger" type="button" data-detail-cancel="${booking.id}">Cancel Booking</button>`
     : "";
   if (isPhotographer) {
-    if (
-      booking.status === "requested" ||
-      booking.status === "awaiting_payment"
-    ) {
+    if (booking.status === "requested") {
+      requestedActions = `
+        <button class="btn btn-ghost btn-sm btn-danger" type="button" data-detail-reject="${booking.id}">Reject</button>
+        <button class="btn btn-sm" type="button" data-detail-offer="${booking.id}" data-tip="Change the final price or details before sending the payment request.">Customize Offer</button>
+        <button class="btn btn-sm btn-accept" type="button" data-detail-accept="${booking.id}">Accept Booking</button>`;
+    } else if (booking.status === "awaiting_payment") {
       actions = `
         <button class="btn btn-ghost btn-sm btn-danger" type="button" data-detail-reject="${booking.id}">Reject</button>
         <button class="btn btn-sm" type="button" data-detail-offer="${booking.id}" data-tip="Change the final price or details before sending the payment request.">Customize Offer</button>
         <button class="btn btn-ghost btn-sm" type="button" data-detail-cash="${booking.id}" data-tip="Use this if the client paid you outside the app. It bypasses Stripe.">Mark as Paid in Cash</button>
-        <p class="hint">Bypasses Stripe. Use only if paid outside the platform.</p>
-        ${cancelBtn}`;
+        <p class="hint">Bypasses Stripe. Use only if paid outside the platform.</p>`;
+      confirmedActions = cancelBtn;
     } else if (booking.status === "accepted") {
-      actions = `<button class="btn btn-sm" type="button" data-detail-complete="${booking.id}">Mark as Completed</button>${cancelBtn}`;
+      confirmedActions = `<button class="btn btn-sm" type="button" data-detail-complete="${booking.id}">Mark as Completed</button>${cancelBtn}`;
     }
   } else if (
     booking.status === "awaiting_payment" ||
     booking.status === "accepted"
   ) {
-    actions = payActionHtml(booking) + cancelBtn;
+    actions = payActionHtml(booking);
+    confirmedActions = cancelBtn;
   } else if (booking.status === "requested") {
     actions = cancelBtn;
   }
@@ -1538,7 +1543,12 @@ function renderRequestDetail(booking) {
           ? '<div class="chat-closed">This conversation is closed because the booking was cancelled.</div>'
           : `<form class="chat-input-area" id="chat-form">
         <input id="chat-input" type="text" maxlength="500" placeholder="Write a message…" class="chat-input" autocomplete="off" aria-label="Message" />
-        <button type="submit" class="chat-send-btn">Send</button>
+        <button type="submit" class="chat-send-btn" aria-label="Send message" title="Send message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
       </form>`
       }
     </div>`;
@@ -1563,8 +1573,17 @@ function renderRequestDetail(booking) {
   if (switching) {
     body.scrollTop = 0;
   }
-  actionsBox.innerHTML = actions
-    ? `<div class="detail-actions">${actions}</div>`
+  const hasActions = Boolean(requestedActions || confirmedActions || actions);
+  actionsBox.innerHTML = hasActions
+    ? `<div class="detail-actions">
+        <div class="action-group" id="actions-requested"${
+          requestedActions ? "" : " hidden"
+        }>${requestedActions}</div>
+        <div class="action-group" id="actions-confirmed"${
+          confirmedActions ? "" : " hidden"
+        }>${confirmedActions}</div>
+        ${actions ? `<div class="action-group">${actions}</div>` : ""}
+      </div>`
     : "";
   const offerButton = actionsBox.querySelector("[data-detail-offer]");
   if (offerButton) {
@@ -1593,6 +1612,10 @@ function renderRequestDetail(booking) {
     refundButton.addEventListener("click", () =>
       confirmRefundDeposit(booking.id)
     );
+  }
+  const acceptButton = actionsBox.querySelector("[data-detail-accept]");
+  if (acceptButton) {
+    acceptButton.addEventListener("click", () => confirmAccept(booking.id));
   }
   actionsBox.querySelectorAll("[data-pay]").forEach((button) => {
     button.addEventListener("click", () =>
@@ -2091,6 +2114,29 @@ async function confirmComplete(id) {
     showToast("Booking completed.");
     await refreshRequestView(id);
   }
+}
+
+async function confirmAccept(id) {
+  const confirmed = window.confirm(
+    "Accept this booking as-is? The client will be asked to pay the 20% deposit."
+  );
+  if (!confirmed) {
+    return;
+  }
+  const ok = await bookingAction(id, "accept");
+  if (!ok) {
+    return;
+  }
+  const requested = document.getElementById("actions-requested");
+  const confirmedBox = document.getElementById("actions-confirmed");
+  if (requested) {
+    requested.hidden = true;
+  }
+  if (confirmedBox) {
+    confirmedBox.hidden = false;
+  }
+  showToast("Booking accepted — deposit requested from the client.");
+  await refreshRequestView(id);
 }
 
 async function confirmReject(id) {
