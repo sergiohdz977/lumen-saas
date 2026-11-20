@@ -10,7 +10,7 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="css/styles.css?v=76" />
+  <link rel="stylesheet" href="css/styles.css?v=78" />
 </head>
 <body>
   <header class="site-header">
@@ -581,27 +581,34 @@
   <div id="info-modal-chat" class="modal" hidden>
     <div class="modal-panel chat-info-panel">
       <button class="modal-close" id="info-chat-close" type="button" aria-label="Close">&times;</button>
-      <div class="modal-content">
-        <h2 class="modal-title">Negocia y cierra tu reserva</h2>
-        <p class="modal-text">Este es tu espacio privado para hablar con el fotógrafo, acordar los detalles de la sesión y cerrar el trato a tu medida.</p>
+      <div class="modal-content-inner">
+        <!-- Photographer version -->
+        <div id="info-text-photographer">
+          <h2 class="modal-title">Negotiate and close your booking</h2>
+          <p class="modal-text">This is your private space to talk with the client, agree on session details, and tailor the deal to your needs.</p>
+          <p class="modal-text">From here you can:</p>
+          <ul class="modal-list">
+            <li><strong>Send custom offers:</strong> Propose a different price or package.</li>
+            <li><strong>Record cash payments:</strong> If you agree to be paid outside the platform.</li>
+            <li><strong>Reject the request:</strong> If the conditions don't work for you.</li>
+          </ul>
+          <p class="modal-text disclaimer">All agreements and deposits made through Lumen are protected by our moderation policy.</p>
+        </div>
 
-        <p class="modal-text">Desde aquí puedes:</p>
-        <ul class="modal-list">
-          <li><strong>Enviar ofertas personalizadas:</strong> Propón un precio o paquete diferente.</li>
-          <li><strong>Registrar pagos en efectivo:</strong> Si acordáis pagar fuera de la plataforma.</li>
-          <li><strong>Rechazar la solicitud:</strong> Si las condiciones no encajan.</li>
-        </ul>
-
-        <p class="modal-text disclaimer">
-          Todos los acuerdos y depósitos realizados a través de Lumen están protegidos por nuestra política de moderación.
-        </p>
-
-        <button id="btn-go-chat" class="btn-primary" type="button">Ir al chat</button>
+        <!-- Client version -->
+        <div id="info-text-client" style="display: none;">
+          <h2 class="modal-title">Talk to your photographer</h2>
+          <p class="modal-text">This is your private space to chat directly with the photographer, ask questions, and finalize the details of your session.</p>
+          <p class="modal-text">Use the chat to coordinate your shoot. If you eventually need to cancel, you can do so from the button below according to the moderate cancellation policy.</p>
+          <p class="modal-text disclaimer">All agreements made through Lumen are protected by our moderation policy.</p>
+        </div>
       </div>
+
+      <button id="btn-go-chat" class="btn-primary" style="margin-top: 20px; width: 100%;" type="button">Go to chat</button>
     </div>
   </div>
 
-  <script src="js/common.js?v=76"></script>
-  <script src="js/dashboard.js?v=76"></script>
+  <script src="js/common.js?v=78"></script>
+  <script src="js/dashboard.js?v=78"></script>
 </body>
 </html>

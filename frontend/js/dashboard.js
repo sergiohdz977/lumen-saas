@@ -1597,9 +1597,53 @@ function renderRequestDetail(booking) {
         return;
       }
       input.value = "";
-      await sendChatMessage(booking.id, text);
+      appendChatDraft(text);
+      const sent = await sendChatMessage(booking.id, text);
+      if (!sent) {
+        // The optimistic bubble is not real: repaint from the server.
+        await loadChat(booking.id);
+      }
     });
   }
+}
+
+/* Paint the message the user just sent right away (WhatsApp-style), then
+   sendChatMessage reconciles it with the server copy. */
+function appendChatDraft(text) {
+  const list = document.getElementById("chat-messages");
+  if (!list) {
+    return;
+  }
+  const empty = list.querySelector("p.meta");
+  if (empty) {
+    empty.remove();
+  }
+  const isPhotographer = myRole === "photographer";
+  const username = localStorage.getItem(STORAGE.username) || "";
+  const time = formatDate(new Date().toISOString(), { withTime: true });
+  const row = document.createElement("div");
+  if (isPhotographer) {
+    row.className = "message-row photographer";
+    row.innerHTML = `
+      <div class="message-bubble">
+        <p class="message-text">${escapeHtml(text)}</p>
+        <span class="message-time">${time}</span>
+      </div>`;
+  } else {
+    const initial = escapeHtml(
+      (username.charAt(0) || "?").toUpperCase()
+    );
+    row.className = "message-row client";
+    row.innerHTML = `
+      <div class="avatar">${initial}</div>
+      <div class="message-bubble">
+        <span class="message-sender">${escapeHtml(username)}</span>
+        <p class="message-text">${escapeHtml(text)}</p>
+        <span class="message-time">${time}</span>
+      </div>`;
+  }
+  list.appendChild(row);
+  list.scrollTop = list.scrollHeight;
 }
 
 async function openRequestDetail(id) {
@@ -1795,12 +1839,14 @@ async function sendChatMessage(bookingId, text) {
     });
     if (!response.ok) {
       showToast(await readError(response));
-      return;
+      return false;
     }
     await loadChat(bookingId);
+    return true;
   } catch (error) {
     console.error(error);
     showToast("Could not reach the API.");
+    return false;
   }
 }
 
@@ -4463,6 +4509,7 @@ async function init() {
 
   me = meData;
   myRole = me.role;
+  updateChatInfoRole();
   renderMe();
   setupTabs();
   showDash();
@@ -4506,6 +4553,17 @@ async function init() {
 
 const CHAT_INFO_STORAGE_KEY = "has_seen_chat_info_modal";
 
+function updateChatInfoRole() {
+  const photographerText = document.getElementById("info-text-photographer");
+  const clientText = document.getElementById("info-text-client");
+  if (!photographerText || !clientText) {
+    return;
+  }
+  const isPhotographer = myRole === "photographer";
+  photographerText.style.display = isPhotographer ? "" : "none";
+  clientText.style.display = isPhotographer ? "none" : "";
+}
+
 function initChatInfoModal() {
   const modal = document.getElementById("info-modal-chat");
   const goButton = document.getElementById("btn-go-chat");
@@ -4513,6 +4571,7 @@ function initChatInfoModal() {
   if (!modal || !goButton) {
     return;
   }
+  updateChatInfoRole();
   if (localStorage.getItem(CHAT_INFO_STORAGE_KEY) === null) {
     modal.hidden = false;
   }
@@ -4537,6 +4596,7 @@ function initChatInfoModal() {
   const helpButton = document.getElementById("btn-help-chat");
   if (helpButton) {
     helpButton.addEventListener("click", () => {
+      updateChatInfoRole();
       modal.hidden = false;
     });
   }
