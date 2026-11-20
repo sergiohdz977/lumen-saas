@@ -21,7 +21,6 @@ const bookLocation = document.getElementById("book-location");
 const bookTime = document.getElementById("book-time");
 const bookNotes = document.getElementById("book-notes");
 const bookError = document.getElementById("book-error");
-const bookPolicyName = document.getElementById("book-policy-name");
 const bookPolicyLink = document.getElementById("book-policy-link");
 const bookPolicyCheck = document.getElementById("book-policy-check");
 const bookSubmit = document.getElementById("book-submit");
@@ -601,7 +600,6 @@ function openBookModal(packageId, title) {
   bookForm.dataset.policy = policy;
   bookForm.dataset.policySummary =
     (pkg && pkg.cancellation_summary) || "";
-  bookPolicyName.textContent = cancellationPolicyLabel(policy);
   updateBookSubmitState();
   const now = new Date();
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -613,7 +611,7 @@ function openBookModal(packageId, title) {
 function openPolicyModal() {
   const policy = bookForm.dataset.policy || "moderate";
   document.getElementById("policy-title").textContent =
-    `${cancellationPolicyLabel(policy)} cancellation policy`;
+    "Cancellation policy";
   const summary = bookForm.dataset.policySummary;
   document.getElementById("policy-body").textContent =
     (policy === "custom" && summary) ||
