@@ -4606,8 +4606,18 @@ html[data-theme="dark"] .theme-icon--moon {
 }
 
 @media (max-width: 720px) {
-  .nav .bell-area {
-    display: none !important;
+  .header-inner > .bell-area {
+    margin-left: auto;
+  }
+  .header-inner > .bell-area .bell-panel {
+    position: fixed;
+    top: 76px;
+    right: 14px;
+    left: auto;
+    width: min(340px, calc(100vw - 28px));
+  }
+  .mobile-menu-toggle {
+    margin-left: 8px;
   }
   .nav #auth-user .auth-greeting {
     display: none;

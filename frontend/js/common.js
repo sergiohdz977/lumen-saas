@@ -756,6 +756,27 @@ function initHeader({ onLogin, onSignup } = {}) {
     });
     syncThemeButton();
   }
+  const bellArea = document.getElementById("bell-area");
+  if (bellArea && nav && menuToggle) {
+    const headerInner = menuToggle.parentElement;
+    const mobileQuery = window.matchMedia("(max-width: 720px)");
+    const placeBell = () => {
+      if (mobileQuery.matches) {
+        if (bellArea.parentElement !== headerInner) {
+          headerInner.insertBefore(bellArea, menuToggle);
+        }
+      } else if (bellArea.parentElement !== nav) {
+        const authArea = nav.querySelector("#auth-area");
+        nav.insertBefore(bellArea, authArea || null);
+      }
+    };
+    placeBell();
+    if (mobileQuery.addEventListener) {
+      mobileQuery.addEventListener("change", placeBell);
+    } else if (mobileQuery.addListener) {
+      mobileQuery.addListener(placeBell);
+    }
+  }
   const btnLogin = document.getElementById("btn-login");
   const btnSignup = document.getElementById("btn-signup");
   const btnLogout = document.getElementById("btn-logout");
