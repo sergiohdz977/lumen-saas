@@ -1649,7 +1649,7 @@ function appendChatDraft(text) {
   if (!list) {
     return;
   }
-  const empty = list.querySelector("p.meta");
+  const empty = list.querySelector("p.meta, .chat-empty");
   if (empty) {
     empty.remove();
   }
@@ -1658,7 +1658,7 @@ function appendChatDraft(text) {
   const time = formatDate(new Date().toISOString(), { withTime: true });
   const row = document.createElement("div");
   if (isPhotographer) {
-    row.className = "message-row photographer";
+    row.className = "message-row photographer message-row--new";
     row.innerHTML = `
       <div class="message-bubble">
         <p class="message-text">${escapeHtml(text)}</p>
@@ -1668,7 +1668,7 @@ function appendChatDraft(text) {
     const initial = escapeHtml(
       (username.charAt(0) || "?").toUpperCase()
     );
-    row.className = "message-row client";
+    row.className = "message-row client message-row--new";
     row.innerHTML = `
       <div class="avatar">${initial}</div>
       <div class="message-bubble">
@@ -1857,14 +1857,22 @@ function renderChat(messages, forceBottom) {
   }
   const nearBottom =
     list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+  // Only bubbles that were not on screen yet animate in; the 4s polling
+  // re-render must not replay messageIn for the whole history.
+  const seen = new Set(
+    Array.from(list.querySelectorAll(".message-row[data-message-id]")).map(
+      (row) => row.dataset.messageId
+    )
+  );
   list.innerHTML = messages
     .map((message) => {
       const time = formatDate(message.created_at, {
         withTime: true,
       });
+      const isNew = !seen.has(String(message.id)) ? " message-row--new" : "";
       if (message.is_system || !message.sender_username) {
         return `
-        <div class="message-row system">
+        <div class="message-row system${isNew}" data-message-id="${message.id}">
           <div class="message-bubble">
             <p class="message-text">${escapeHtml(message.text)}</p>
             <span class="message-time">${time}</span>
@@ -1876,7 +1884,7 @@ function renderChat(messages, forceBottom) {
         message.sender_username.charAt(0).toUpperCase()
       );
       return `
-      <div class="message-row ${isClient ? "client" : "photographer"}">
+      <div class="message-row ${isClient ? "client" : "photographer"}${isNew}" data-message-id="${message.id}">
         ${isClient ? `<div class="avatar">${initial}</div>` : ""}
         <div class="message-bubble">
           ${

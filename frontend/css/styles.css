@@ -4562,12 +4562,12 @@ body {
   }
 }
 
-.message-row {
+.message-row--new {
   animation: messageIn 0.22s ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .message-row {
+  .message-row--new {
     animation: none;
   }
 }
