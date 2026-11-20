@@ -891,10 +891,30 @@ function initBell() {
   const list = document.getElementById("bell-list");
   let badgeLoaded = false;
 
+  let backdrop = null;
   const close = () => {
     panel.hidden = true;
     button.setAttribute("aria-expanded", "false");
+    if (backdrop) {
+      backdrop.hidden = true;
+    }
   };
+
+  const closeButton = document.getElementById("bell-close");
+  if (closeButton) {
+    closeButton.addEventListener("click", close);
+  }
+
+  /* Mobile: dim the page behind the bottom sheet; tapping it closes. */
+  backdrop = document.getElementById("bell-backdrop");
+  if (!backdrop) {
+    backdrop = document.createElement("div");
+    backdrop.id = "bell-backdrop";
+    backdrop.className = "bell-backdrop";
+    backdrop.hidden = true;
+    backdrop.addEventListener("click", close);
+    document.body.appendChild(backdrop);
+  }
 
   /* On mobile the panel is a full-screen sheet, so it must escape the
      header (backdrop-filter would trap position: fixed). */
@@ -913,11 +933,6 @@ function initBell() {
     panelQuery.addEventListener("change", placePanel);
   } else if (panelQuery.addListener) {
     panelQuery.addListener(placePanel);
-  }
-
-  const closeButton = document.getElementById("bell-close");
-  if (closeButton) {
-    closeButton.addEventListener("click", close);
   }
 
   async function loadBadge() {
@@ -997,8 +1012,7 @@ function initBell() {
       if (typeof window.lumenNavigate === "function") {
         // Already on the dashboard: switch tabs without a reload.
         window.lumenNavigate(href);
-        panel.hidden = true;
-        button.setAttribute("aria-expanded", "false");
+        close();
         loadPanel();
       } else {
         window.location.href = href;
@@ -1019,6 +1033,9 @@ function initBell() {
     button.setAttribute("aria-expanded", String(opening));
     if (opening) {
       loadPanel();
+      if (backdrop) {
+        backdrop.hidden = false;
+      }
       // Seeing the notifications marks them read: the badge must clear.
       try {
         await apiFetch("/notifications/read-all/", {

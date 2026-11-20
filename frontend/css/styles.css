@@ -4761,28 +4761,57 @@ html[data-theme="dark"] .chat-empty svg {
   color: #3a4856;
 }
 
-/* ---------- Notification bell panel (mobile sheet) ---------- */
+/* ---------- Notification bell (mobile bottom sheet) ---------- */
 .bell-close {
   display: none;
 }
 
+.bell-backdrop {
+  display: none;
+}
+
 @media (max-width: 768px) {
-  #bell-panel.bell-panel {
+  .bell-backdrop {
+    display: block;
     position: fixed;
     inset: 0;
-    width: 100vw !important;
-    max-width: none;
-    height: 100dvh;
-    max-height: 100dvh;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 999;
+  }
+
+  #bell-panel.bell-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    max-width: 100%;
+    max-height: 60vh;
+    height: auto;
     margin: 0;
-    padding: calc(env(safe-area-inset-top, 0px) + 52px) 16px
-      calc(env(safe-area-inset-bottom, 0px) + 14px);
+    padding: 26px 16px calc(env(safe-area-inset-bottom, 0px) + 10px);
     border: 0;
-    border-radius: 0;
+    border-radius: 20px 20px 0 0;
+    background: var(--panel);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    z-index: 90;
+    z-index: 1000;
+    animation: bell-sheet-in 0.24s var(--ease-out);
+  }
+
+  #bell-panel.bell-panel::before {
+    content: "";
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--line);
   }
 
   .bell-close {
@@ -4790,15 +4819,15 @@ html[data-theme="dark"] .chat-empty svg {
     align-items: center;
     justify-content: center;
     position: absolute;
-    top: calc(env(safe-area-inset-top, 0px) + 10px);
-    right: 12px;
-    width: 40px;
-    height: 40px;
-    border: 1px solid var(--line);
+    top: 14px;
+    right: 14px;
+    width: 30px;
+    height: 30px;
+    border: 0;
     border-radius: 50%;
     background: var(--panel-2);
-    color: var(--text);
-    font-size: 22px;
+    color: var(--muted);
+    font-size: 18px;
     line-height: 1;
     cursor: pointer;
     z-index: 2;
@@ -4806,14 +4835,13 @@ html[data-theme="dark"] .chat-empty svg {
 
   .bell-close:hover,
   .bell-close:focus-visible {
-    border-color: var(--accent);
-    color: var(--accent);
+    color: var(--text);
+    background: var(--hover-line);
   }
 
   .bell-panel .bell-list {
     flex: 1 1 auto;
     min-height: 0;
-    max-height: 80vh;
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
@@ -4854,5 +4882,15 @@ html[data-theme="dark"] .chat-empty svg {
     text-align: center;
     padding: 12px;
     font-size: 14px;
+    border-top: 1px solid var(--line);
+  }
+}
+
+@keyframes bell-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
   }
 }
