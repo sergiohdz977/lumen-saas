@@ -4186,3 +4186,209 @@ body {
 .chat-input-area {
   flex-shrink: 0;
 }
+
+/* ---------- Chat UI polish (SaaS) ---------- */
+.chat-container {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.chat-messages {
+  background-color: #f9fafb;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Bubbles */
+.message-row.client .message-bubble {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px 16px 16px 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.message-row.photographer .message-bubble {
+  background-color: #2b5c6b;
+  border-radius: 16px 16px 4px 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* Input area */
+.chat-input-area {
+  background-color: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  padding: 12px 14px;
+}
+
+.chat-input {
+  border-radius: 24px;
+  background-color: #f3f4f6;
+  border: 1px solid transparent;
+}
+
+.chat-input:focus {
+  background-color: #ffffff;
+  border-color: #2b5c6b;
+  box-shadow: 0 0 0 3px rgba(43, 92, 107, 0.2);
+}
+
+.chat-send-btn {
+  border-radius: 24px;
+  padding: 0 18px;
+  min-height: 40px;
+  font-size: 14px;
+}
+
+.chat-send-btn:hover {
+  background-color: #1f4350;
+}
+
+/* Accordion arrow */
+.accordion-icon:hover {
+  color: #2b5c6b;
+}
+
+/* Drawer action buttons */
+.detail-actions .btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+/* ---------- Compact booking drawer layout ---------- */
+.request-drawer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.drawer-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Compact action bar */
+.drawer-actions {
+  padding: 8px 12px;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.detail-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.detail-actions .hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.detail-actions .btn {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.2;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.detail-actions .btn:not(.btn-ghost):not([data-detail-offer]) {
+  background: #2b5c6b;
+  color: #ffffff;
+  border: 1px solid #2b5c6b;
+  padding: 6px 16px;
+}
+
+.detail-actions .btn-ghost {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.detail-actions [data-detail-offer] {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.detail-actions .btn-danger {
+  background: #ffffff;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.detail-actions .btn-danger:hover {
+  background: #fef2f2;
+}
+
+.detail-actions [data-detail-cancel] {
+  font-size: 11px;
+  color: #64748b;
+  text-decoration: underline;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* Chat takes the remaining height */
+.chat-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  height: auto;
+}
+
+#chat-messages,
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 12px;
+  min-height: 0;
+}
+
+.chat-input-area {
+  padding: 8px 12px;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+/* Compact accordion */
+.booking-accordion {
+  padding: 6px 0;
+  margin-bottom: 8px;
+}
+
+.accordion-header {
+  padding: 4px 0;
+}
